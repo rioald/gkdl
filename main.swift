@@ -146,6 +146,8 @@ final class Engine {
     var chosenCombos: [UInt64] { active ? defaultSources.filter(spaceCombos.contains) : [] }
     var active: Bool { defaults.object(forKey: "active") == nil || defaults.bool(forKey: "active") }
     var longPressCapsLock: Bool { defaults.bool(forKey: "longPressCapsLock") }
+    var manualCorrection: Bool { defaults.object(forKey: "manualCorrection") == nil || defaults.bool(forKey: "manualCorrection") }
+    var manualCorrectionShortcut: ManualCorrectionShortcut { ManualCorrectionShortcut(rawValue: defaults.string(forKey: "manualCorrectionShortcut") ?? "") ?? .shiftBackspace }
     var preserveCapsLock: Bool { defaults.object(forKey: "preserveCapsLock") == nil || defaults.bool(forKey: "preserveCapsLock") }
     // The saved choice waits while Caps Lock is a Korean/English key, however that key was saved.
     var koreanCapsLock: Bool { defaults.bool(forKey: "koreanCapsLock") && !capsLockSwitches() }
@@ -549,6 +551,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let installer = UpdateInstaller()
     var preparedToRelaunch = false
     lazy var optionInput = makeOptionInput()
+    lazy var manualCorrection = makeManualCorrection()
+    let terminalCorrection = TerminalCorrectionTracker()
+    let manualCorrectionSwitch = NSButton(checkboxWithTitle: "단축키로 한영 잘못 입력 바로잡기", target: nil, action: nil)
+    let manualShortcutPicker = NSPopUpButton(frame: .zero, pullsDown: false)
+    let correctionStatus = NSTextField(wrappingLabelWithString: "")
     lazy var updates = UpdateChecker(defaults: engine.defaults)
     var updateTimer: Timer?
     var tabButtons: [NSButton] = []
@@ -651,6 +658,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         permissionSettingsWasActive = false
     }
     func stopKeyTap() {
+        terminalCorrection.reset()
+        manualCorrection.reset()
         optionInput.cancel()
         cancelCapsRestore()
         englishCaps.reset()
@@ -675,12 +684,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 guard let info else { return Unmanaged.passUnretained(event) }
                 let owner = Unmanaged<AppDelegate>.fromOpaque(info).takeUnretainedValue()
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                    owner.terminalCorrection.reset()
+                    owner.manualCorrection.reset()
                     owner.cancelLongPress()
                     owner.optionInput.cancel()
                     // Retain owned physical key-ups to avoid an extra native release.
                     if let tap = owner.keyTap { CGEvent.tapEnable(tap: tap, enable: true) }
                     return Unmanaged.passUnretained(event)
                 }
+                if owner.manualCorrection.handle(event, enabled: owner.engine.active && owner.engine.manualCorrection && !owner.optionInput.busy, marker: owner.nativePulseMarker, shortcut: owner.engine.manualCorrectionShortcut) { return nil }
+                owner.terminalCorrection.observe(event, enabled: owner.engine.active && owner.engine.manualCorrection && !owner.optionInput.busy, marker: owner.nativePulseMarker)
                 // Keys this app posts again, such as ones held while a switch landed, act only once.
                 let ours = event.getIntegerValueField(.eventSourceUserData) == owner.nativePulseMarker
                 if !ours && (type == .keyDown || type == .flagsChanged) {
@@ -790,6 +803,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         escapeSwitch.toolTip = trusted ? switchErrors[escapeSwitch] : accessibilityHint
         pressAccess.toolTip = trusted && engine.active && !ready ? "권한 반영을 기다리는 중입니다. 계속 전환되지 않으면 앱을 다시 실행하세요."
             : "키를 누르는 순간 전환하려면 접근성 권한이 필요합니다."
+        manualCorrectionSwitch.state = engine.manualCorrection ? .on : .off
+        manualCorrectionSwitch.isEnabled = trusted
+        manualShortcutPicker.selectItem(at: ManualCorrectionShortcut.allCases.firstIndex(of: engine.manualCorrectionShortcut)!)
+        manualShortcutPicker.isEnabled = trusted && engine.manualCorrection
+        manualCorrectionSwitch.toolTip = trusted ? "한영 상태를 잘못 선택해 입력한 커서 앞 단어를 바로잡습니다. 다른 입력 없이 다시 누르면 원문으로 복원합니다. 선택한 단축키의 기존 동작보다 우선합니다." : "일반 탭에서 접근성 권한을 허용해주세요."
     }
     // Each checkbox saves its own preference; the tap starts or stops with them.
     @objc func toggleFeature(_ sender: NSButton) {
@@ -1025,6 +1043,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         _ = AXIsProcessTrustedWithOptions(options)
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        terminalCorrection.frontmostChanged()
         let mainMenu = NSMenu()
         let appEntry = NSMenuItem(); let appMenu = NSMenu(title: "gksdud")
         appMenu.addItem(withTitle: "gksdud 종료", action: #selector(quit), keyEquivalent: "q").target = self
@@ -1066,9 +1085,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             }
         })
         observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.terminalCorrection.frontmostChanged()
+            self?.manualCorrection.reset()
             self?.optionInput.cancel(focusChanged: true)
         })
-        observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in self?.optionInput.cancel() })
+        observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in self?.terminalCorrection.reset(); self?.manualCorrection.reset(); self?.optionInput.cancel() })
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.screensDidWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
             observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in self?.recover() })
         }
@@ -1208,6 +1229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func inputSourceChanged() {
         RunLoop.main.perform(inModes: [.common]) { [weak self] in
             guard let self else { return }
+            self.manualCorrection.sourceChanged()
             let id = self.currentSource?.id
             if let id { self.sourceHistory.note(id) }
             if id == self.switchLanding {
@@ -1381,13 +1403,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         do { _ = try engine.apply(sources: keys, target: target); lastError = ""; stickyError = ""; repairFailed = false; ensureKeyTap(); refreshStatus() } catch { report(error); resetSelection() }
     }
     func restoreNow() {
+        terminalCorrection.reset()
+        manualCorrection.reset()
         optionInput.cancel()
         guard !engine.isUpdatingSettings else { return }
         cancelLongPress()
         do { try engine.restore(); lastError = ""; stickyError = ""; repairFailed = false; refreshStatus() } catch { report(error) }
         resetSelection(); syncCapsPreservation(); updatePressAccess(); refreshKeyboardState()
     }
-    func recover() { sourceCache = nil; queuedSwitch = nil; releaseHeldKeys(); optionInput.cancel(); if capsRestoreTasks.isEmpty { englishCaps.switching = false }; cancelLongPress(); longPress = LongPressState(); pressGate.held.removeAll(); spaceGate = SpaceComboGate(); separateGate.held.removeAll(); for delay in [0.5, 2.0, 5.0] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.repair() } } }
+    func recover() { terminalCorrection.reset(); manualCorrection.reset(); sourceCache = nil; queuedSwitch = nil; releaseHeldKeys(); optionInput.cancel(); if capsRestoreTasks.isEmpty { englishCaps.switching = false }; cancelLongPress(); longPress = LongPressState(); pressGate.held.removeAll(); spaceGate = SpaceComboGate(); separateGate.held.removeAll(); for delay in [0.5, 2.0, 5.0] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.repair() } } }
     // The tap does not see Caps Lock on another user's login window, and leaves it alone on the lock screen. Coming back
     // with English (or Korean showing the English case) selected, the lock as left there is the English case. A restore on
     // its way finishes first: unlocking can land in Korean while its input method turns the lock off.
