@@ -4,7 +4,7 @@ import ServiceManagement
 extension AppDelegate {
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 384, height: 636), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "gksdud"; window.isReleasedWhenClosed = false
+        window.title = "gkdl"; window.isReleasedWhenClosed = false
         window.delegate = self; window.hidesOnDeactivate = false; window.center()
         let content = window.contentView!
         func column() -> NSStackView {
@@ -40,7 +40,7 @@ extension AppDelegate {
         }
         let tabs = NSStackView(); tabs.distribution = .fillEqually; tabs.spacing = 8
         tabs.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(tabs)
-        for (index, title) in ["일반", "대소문자", "특수문자", "추가기능", "아차차", "gksdud"].enumerated() {
+        for (index, title) in ["일반", "대소문자", "특수문자", "추가기능", "아차차", "gkdl"].enumerated() {
             let button = NSButton(title: title, target: self, action: #selector(changeTab(_:)))
             button.tag = index; button.setButtonType(.toggle); button.bezelStyle = .regularSquare
             button.isBordered = false; button.imagePosition = .imageAbove; button.imageScaling = .scaleProportionallyDown
@@ -125,7 +125,7 @@ extension AppDelegate {
             replaceInputMenu.topAnchor.constraint(equalTo: replaceRow.topAnchor), replaceInputMenu.bottomAnchor.constraint(equalTo: replaceRow.bottomAnchor)])
         hint("⌘+드래그로 위치를 옮길 수 있어요.", in: general)
         general.setCustomSpacing(12, after: general.arrangedSubviews.last!); full(replaceRow, in: general)
-        iconPicker.addItems(withTitles: ["한 / dud", "한 / A", "KO / EN", "ㅎuㅎ / dud"])
+        iconPicker.addItems(withTitles: ["한 / hi", "한 / A", "KO / EN", "하 / hi"])
         iconPicker.selectItem(at: iconStyle); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
         iconPicker.setAccessibilityLabel("메뉴바 아이콘 조합")
         for preview in [koreanPreview, englishPreview] {
@@ -192,7 +192,7 @@ extension AppDelegate {
         appIcon.widthAnchor.constraint(equalToConstant: 72).isActive = true
         appIcon.heightAnchor.constraint(equalToConstant: 72).isActive = true
         about.addArrangedSubview(appIcon)
-        let name = NSTextField(labelWithString: "gksdud"); name.font = .systemFont(ofSize: 20, weight: .semibold)
+        let name = NSTextField(labelWithString: "gkdl"); name.font = .systemFont(ofSize: 20, weight: .semibold)
         about.setCustomSpacing(12, after: appIcon); about.addArrangedSubview(name)
         updateHeading.font = .systemFont(ofSize: 12); updateHeading.textColor = .secondaryLabelColor; updateHeading.alignment = .center
         about.setCustomSpacing(4, after: name); full(updateHeading, in: about)
@@ -220,12 +220,11 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let supportTitle = NSTextField(labelWithString: "후원하기"); supportTitle.font = .systemFont(ofSize: 13, weight: .semibold)
-        about.setCustomSpacing(20, after: about.arrangedSubviews.last!); about.addArrangedSubview(supportTitle)
-        let supportNote = NSTextField(wrappingLabelWithString: "후원해주시면 큰 힘이 됩니다!\nApp Store 등록에 사용하겠습니다.")
-        supportNote.font = .systemFont(ofSize: 11); supportNote.textColor = .secondaryLabelColor; supportNote.alignment = .center
-        about.setCustomSpacing(6, after: supportTitle); about.addArrangedSubview(supportNote)
-        about.setCustomSpacing(12, after: supportNote); about.addArrangedSubview(link("Fairy", icon: "fairy", template: false, action: #selector(openSupport)))
+        let credits = NSTextField(wrappingLabelWithString: "TWENTYOZ · gkdl (하이)\n한영 전환과 아차차 바로잡기\n\ngksdud 기반 · © 2026 CodingNoye · MIT")
+        credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
+        about.addArrangedSubview(credits)
+        let license = NSButton(title: "오픈소스 라이선스", target: self, action: #selector(openLicense)); license.bezelStyle = .rounded
+        about.addArrangedSubview(NSStackView(views: [link("원본 프로젝트", icon: "github", action: #selector(openUpstream)), license]))
         selectTab(0); updatePressAccess(); refreshSpecialMode(); refreshUpdates(); refreshIconPreviews(); refreshKeyboardState(); updateInputIndicator()
     }
     func tabGlyph(_ text: String, fontSize: CGFloat = 16) -> NSImage {
@@ -278,13 +277,16 @@ extension AppDelegate {
             repair()
         }
     }
-    @objc func openSupport() { NSWorkspace.shared.open(URL(string: "https://fairy.hada.io/@gksdud")!) }
-    @objc func openProject() { NSWorkspace.shared.open(URL(string: "https://github.com/codingnoye/gksdud")!) }
+    @objc func openUpstream() { NSWorkspace.shared.open(URL(string: "https://github.com/codingnoye/gksdud")!) }
+    @objc func openLicense() {
+        if let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil) { NSWorkspace.shared.open(url) }
+    }
+    @objc func openProject() { NSWorkspace.shared.open(URL(string: "https://github.com/rioald/gkdl")!) }
     func refreshUpdates() {
         let release = updates.available
         tabButtons.last?.image = release == nil ? tabGlyph("?") : updateGlyph(NSSize(width: 24, height: 20), color: .controlAccentColor)
         selectTab(selectedTab)
-        tabButtons.last?.setAccessibilityLabel(release == nil ? "gksdud 탭" : "gksdud 탭, 업데이트 가능")
+        tabButtons.last?.setAccessibilityLabel(release == nil ? "gkdl 탭" : "gkdl 탭, 업데이트 가능")
         for entry in item?.menu?.items ?? [] where entry.action == #selector(showAbout) { entry.isHidden = release == nil }
         let latest = release.map { " → v\($0.versionString)" } ?? ""
         updateHeading.stringValue = "v\(updates.installedVersion)\(latest)"

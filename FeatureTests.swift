@@ -15,7 +15,7 @@ func runFeatureTests() {
     featureCheck(ReleaseVersion("v1.10.0")! > ReleaseVersion("1.9.9")!)
     featureCheck(ReleaseVersion("1.2")! == ReleaseVersion("1.2.0")!)
     for invalid in ["pre-v1.3.0", "1.3.0-beta", "1..2", "1.2x", "", "1.2.99999999999999999999999"] { featureCheck(ReleaseVersion(invalid) == nil) }
-    func release(_ body: String?, tag: String = "v1.3.0", url: String = "https://github.com/codingnoye/gksdud/releases/tag/v1.3.0", draft: Bool = false, pre: Bool = false) -> AppRelease {
+    func release(_ body: String?, tag: String = "v1.3.0", url: String = "https://github.com/rioald/gkdl/releases/tag/v1.3.0", draft: Bool = false, pre: Bool = false) -> AppRelease {
         AppRelease(tag_name: tag, html_url: url, body: body, draft: draft, prerelease: pre)
     }
     let sample = release("### 요약\r\n\r\n- 탭 추가\r\n- 특수문자 개선\r\n\r\n### 설치\r\n이 내용은 표시하지 않습니다.")
@@ -28,8 +28,11 @@ func runFeatureTests() {
     featureCheck(sample.isNewer(than: "1.2.0") && !sample.isNewer(than: "1.3.0") && !sample.isNewer(than: "2.0.0"))
     featureCheck(!release(nil, draft: true).isNewer(than: "1.2.0"))
     featureCheck(!release(nil, pre: true).isNewer(than: "1.2.0"))
-    featureCheck(!release(nil, url: "https://github.com.evil.test/codingnoye/gksdud/releases/tag/v3.0").isNewer(than: "1.2.0"))
-    let suite = "io.gksdud.feature-tests.\(UUID().uuidString)"
+    featureCheck(!release(nil, url: "https://github.com.evil.test/rioald/gkdl/releases/tag/v3.0").isNewer(than: "1.2.0"))
+    featureCheck(!release(nil, url: "https://github.com/codingnoye/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "Upstream releases never replace gkdl")
+    featureCheck(!release(nil, url: "https://github.com/rioald/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "The old feature fork is not the gkdl update channel")
+    featureCheck(Bundle.main.bundleIdentifier == "kr.twentyoz.gkdl" && UpdateValidation.identifier == "kr.twentyoz.gkdl")
+    let suite = "kr.twentyoz.gkdl.feature-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     var now = Date(timeIntervalSince1970: 100_000), requests = 0
@@ -37,6 +40,7 @@ func runFeatureTests() {
     let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", now: { now }, fetch: { request, done in
         requests += 1; completion = done
         featureCheck(request.url?.host == "api.github.com" && request.timeoutInterval == 20)
+        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases/latest", "Only the independent release repository is queried")
     })
     func respond(_ status: Int, _ data: Data?) {
         completion?(data, HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: status, httpVersion: nil, headerFields: nil), nil)
@@ -121,7 +125,7 @@ func runEnglishSwitchTests() {
     into.capsKeyChanged(english: true, actual: false)
     featureCheck(into.target(english: true) == true, "A switch it did not see start is not taken for one into English")
 
-    let suite = "io.gksdud.english-switch-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.english-switch-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("english-switch-1", name: "Keyboard", serial: "english-switch")
@@ -305,9 +309,9 @@ func runOptionInputTests() {
     front = 99; controller.cancel(focusChanged: true); drain()
     featureCheck(events.isEmpty && !controller.busy, "Never replay queued text into a different app")
     featureCheck(!warnings.isEmpty)
-    featureCheck(AppDelegate.sourceForID("io.gksdud.nonexistent-input-source") == nil, "Unavailable input sources must not crash")
+    featureCheck(AppDelegate.sourceForID("kr.twentyoz.gkdl.nonexistent-input-source") == nil, "Unavailable input sources must not crash")
     if let abc = AppDelegate.sourceForID("com.apple.keylayout.ABC"), let identity = AppDelegate.sourceIdentity(abc) {
-        let owner = AppDelegate(engine: Engine(defaults: UserDefaults(suiteName: "io.gksdud.layout-read-test")!, discover: { [] }))
+        let owner = AppDelegate(engine: Engine(defaults: UserDefaults(suiteName: "kr.twentyoz.gkdl.layout-read-test")!, discover: { [] }))
         let translate = owner.makeOptionInput().environment.deadState
         for (accent, base): (Int64, Int64) in [(14, 0), (32, 32), (34, 0), (45, 45), (14, 83)] {
             let pending = translate(identity, event(accent, option), 0) ?? 0
@@ -333,11 +337,11 @@ func probeOptionInput() throws {
     guard AXIsProcessTrusted() else { throw NSError(domain: "probe", code: 1, userInfo: [NSLocalizedDescriptionKey: "Native input probe requires accessibility permission."]) }
     let previousApp = NSWorkspace.shared.frontmostApplication
     let savedSource = TISCopyCurrentKeyboardInputSource()!.takeRetainedValue()
-    let suite = "io.gksdud.input-probe.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.input-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 160), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-    panel.title = "gksdud 특수문자 입력 실험"
+    panel.title = "gkdl 특수문자 입력 실험"
     let text = NSTextView(frame: NSRect(x: 20, y: 20, width: 480, height: 110))
     text.font = .systemFont(ofSize: 24); panel.contentView!.addSubview(text)
     panel.center(); panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(text); app.activate(ignoringOtherApps: true)
@@ -471,8 +475,8 @@ func probeOptionInput() throws {
     guard passed == total else { throw NSError(domain: "probe", code: 3, userInfo: [NSLocalizedDescriptionKey: "Native input expectations failed."]) }
 }
 
-// Drives the running gksdud with HID-level keys from a second instance, then reads the input source and the Caps Lock lock.
-// Launch the test app from build.sh, signed like the installed one, so it has gksdud's Accessibility permission:
+// Drives the running gkdl with HID-level keys from a second instance, then reads the input source and the Caps Lock lock.
+// Launch the test app from build.sh, signed like the installed one, so it has gkdl's Accessibility permission:
 // open -n -W --stdout <file> <test app> --args --probe-escape
 // It needs ESC to English on in the running app. Keys go only while this probe's window is frontmost.
 // A physical Caps Lock press cannot be generated: posted Caps Lock events do not toggle the lock.
@@ -480,15 +484,15 @@ func probeEscape() throws {
     func failure(_ code: Int, _ message: String) -> NSError { NSError(domain: "probe", code: code, userInfo: [NSLocalizedDescriptionKey: message]) }
     let app = NSApplication.shared
     app.setActivationPolicy(.regular); app.finishLaunching()
-    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gksdud bundle with open -n so the probe has its accessibility permission.") }
+    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gkdl bundle with open -n so the probe has its accessibility permission.") }
     // The running app's settings, read only.
     let saved = UserDefaults.standard
     let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
-    guard NSRunningApplication.runningApplications(withBundleIdentifier: "io.gksdud.inputswitch").contains(where: { $0.processIdentifier != getpid() }),
+    guard NSRunningApplication.runningApplications(withBundleIdentifier: "kr.twentyoz.gkdl").contains(where: { $0.processIdentifier != getpid() }),
           saved.object(forKey: "active") == nil || saved.bool(forKey: "active"), saved.bool(forKey: "escapeToEnglish") else {
-        throw failure(2, "Run gksdud with ESC to English turned on first.")
+        throw failure(2, "Run gkdl with ESC to English turned on first.")
     }
-    let suite = "io.gksdud.escape-probe.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.escape-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     guard let korean = delegate.availableSource("ko"), let english = delegate.availableSource("en") else {
@@ -509,7 +513,7 @@ func probeEscape() throws {
         override func keyDown(with event: NSEvent) {}
     }
     let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
-    panel.title = "gksdud ESC 실험"
+    panel.title = "gkdl ESC 실험"
     let text = NSTextView(frame: NSRect(x: 10, y: 10, width: 400, height: 100)), sink = KeySink(frame: .zero)
     text.font = .systemFont(ofSize: 24); panel.contentView!.addSubview(text); panel.contentView!.addSubview(sink)
     let previousApp = NSWorkspace.shared.frontmostApplication
@@ -537,7 +541,7 @@ func probeEscape() throws {
         }
     }
     func frontmost() -> Bool { panel.isKeyWindow && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() }
-    // Through the HID stream, so the running gksdud's tap and the system shortcut see it. Posted flags also become the
+    // Through the HID stream, so the running gkdl's tap and the system shortcut see it. Posted flags also become the
     // session's flags, so they carry the Caps Lock lock.
     func post(_ code: Int, hold: TimeInterval = 0) throws {
         guard frontmost() else { throw failure(4, "The probe window lost focus; no more keys were sent.") }
@@ -609,7 +613,7 @@ func probeEscape() throws {
 }
 
 func runUpdateInstallTests() throws {
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent("gksdud-installer-test-\(UUID().uuidString)")
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("gkdl-installer-test-\(UUID().uuidString)")
     let fm = FileManager.default
     try fm.createDirectory(at: root, withIntermediateDirectories: false)
     defer { try? fm.removeItem(at: root) }
@@ -624,7 +628,7 @@ func runUpdateInstallTests() throws {
     rejected { try AppReplacement.replace(installed: installed, candidate: candidate, validate: { _, _ in throw UpdateFailure("invalid signature") }, launch: { _ in preconditionFailure() }) }
     featureCheck(version(installed) == "old", "Validate before moving the installed app")
     rejected { try AppReplacement.replace(installed: installed, candidate: candidate, validate: { _, _ in }, launch: { _ in }, move: { from, to in
-        if from.lastPathComponent.hasPrefix(".gksdud-update-") { throw UpdateFailure("move failed") }
+        if from.lastPathComponent.hasPrefix(".gkdl-update-") { throw UpdateFailure("move failed") }
         try fm.moveItem(at: from, to: to)
     }) }
     featureCheck(version(installed) == "old", "Failed replacement restores the old path")
@@ -636,7 +640,7 @@ func runUpdateInstallTests() throws {
     try AppReplacement.replace(installed: installed, candidate: candidate, validate: { new, old in featureCheck(version(new) == "new" && version(old) == "old") }, launch: { featureCheck(version($0) == "new") })
     featureCheck(version(installed) == "new" && version(candidate) == "new")
     let remaining = try fm.contentsOfDirectory(atPath: root.path)
-    featureCheck(remaining.allSatisfy { !$0.hasPrefix(".gksdud-") })
+    featureCheck(remaining.allSatisfy { !$0.hasPrefix(".gkdl-") })
     let archive = root.appendingPathComponent("test.zip")
     try Data("abc".utf8).write(to: archive)
     let valid = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  test.zip\n"
@@ -645,18 +649,23 @@ func runUpdateInstallTests() throws {
     rejected { try UpdateValidation.checksum(archive, text: valid, name: "other.zip") }
     try Data("tampered".utf8).write(to: archive)
     rejected { try UpdateValidation.checksum(archive, text: valid, name: "test.zip") }
-    let names = "gksdud.app/\ngksdud.app/Contents/MacOS/gksdud\n"
-    let listing = "drwxr-xr-x  2.1 unx 0 bx stor 00-Sep-00 00:00 gksdud.app/\n-rwxr-xr-x  2.1 unx 42 bx defN 00-Sep-00 00:00 gksdud.app/Contents/MacOS/gksdud\n"
+    let names = "gkdl.app/\ngkdl.app/Contents/MacOS/gkdl\n"
+    let listing = "drwxr-xr-x  2.1 unx 0 bx stor 00-Sep-00 00:00 gkdl.app/\n-rwxr-xr-x  2.1 unx 42 bx defN 00-Sep-00 00:00 gkdl.app/Contents/MacOS/gkdl\n"
     try UpdateValidation.archiveNames(names, listing: listing)
-    rejected { try UpdateValidation.archiveNames("gksdud.app/../../escape", listing: listing) }
-    rejected { try UpdateValidation.archiveNames("/gksdud.app/file", listing: listing) }
+    rejected { try UpdateValidation.archiveNames(names.replacingOccurrences(of: "gkdl", with: "gksdud"), listing: listing) }
+    rejected { try UpdateValidation.archiveNames("gkdl.app/../../escape", listing: listing) }
+    rejected { try UpdateValidation.archiveNames("/gkdl.app/file", listing: listing) }
     rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "-rwx", with: "lrwx")) }
     rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "42 bx", with: "999999999 bx")) }
-    var release = AppRelease(tag_name: "v1.3.0", html_url: "https://github.com/codingnoye/gksdud/releases/tag/v1.3.0", body: nil, draft: false, prerelease: false)
-    release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://github.com/codingnoye/gksdud/releases/download/v1.3.0/test.zip", size: 100)]
+    var release = AppRelease(tag_name: "v1.3.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v1.3.0", body: nil, draft: false, prerelease: false)
+    release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://github.com/rioald/gkdl/releases/download/v1.3.0/test.zip", size: 100)]
     let assetURL = try release.assetURL(named: "test.zip", limit: 100)
     featureCheck(assetURL.host == "github.com")
     rejected { _ = try release.assetURL(named: "test.zip", limit: 99) }
+    for oldRepository in ["codingnoye/gksdud", "rioald/gksdud"] {
+        release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://github.com/\(oldRepository)/releases/download/v1.3.0/test.zip", size: 100)]
+        rejected { _ = try release.assetURL(named: "test.zip", limit: 100) }
+    }
     release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://evil.test/test.zip", size: 100)]
     rejected { _ = try release.assetURL(named: "test.zip", limit: 100) }
     rejected { _ = try UpdateValidation.installedRequirement(candidate) }
@@ -688,15 +697,15 @@ func runUpdateInstallTests() throws {
 }
 
 func runPrereleaseTests() {
-    let suite = "io.gksdud.channel-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.channel-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let tag = "pre-v1.3.0"
-    let preview = AppRelease(tag_name: tag, html_url: "https://github.com/codingnoye/gksdud/releases/tag/\(tag)", body: nil, draft: false, prerelease: true)
+    let preview = AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: nil, draft: false, prerelease: true)
     featureCheck(!preview.isNewer(than: "1.2.0"))
     var completion: ((Data?, URLResponse?, Error?) -> Void)?
     let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", fetch: { request, done in
-        featureCheck(request.url?.path == "/repos/codingnoye/gksdud/releases/latest" && request.url?.query == nil)
+        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases/latest" && request.url?.query == nil)
         completion = done
     })
     checker.check()
@@ -871,8 +880,8 @@ func runAddedSourceTests() {
         "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", "com.apple.keylayout.ABC-AZERTY"], "Entries map to sources until one does not")
     print("PASS: added input sources: cycle order, other layouts, outside the list, missing sources, separate key and back, history, badges, switch plans, landing, notifications, system history")
 }
-// Drives the running gksdud with its switch keys, then reads the input source and what this probe's text view receives.
-// Launch the test app from build.sh, signed like the installed one, so it has gksdud's Accessibility permission:
+// Drives the running gkdl with its switch keys, then reads the input source and what this probe's text view receives.
+// Launch the test app from build.sh, signed like the installed one, so it has gkdl's Accessibility permission:
 // open -n -W --stdout <file> <test app> --args --probe-input-sources
 // Needs Korean, English and one more input source. It turns added sources on in the running app's settings, which this
 // probe shares, and puts them back afterwards. Letters go only to this probe; switch keys go only while it is frontmost.
@@ -880,12 +889,12 @@ func probeInputSources() throws {
     func failure(_ code: Int, _ message: String) -> NSError { NSError(domain: "probe", code: code, userInfo: [NSLocalizedDescriptionKey: message]) }
     let app = NSApplication.shared
     app.setActivationPolicy(.regular); app.finishLaunching()
-    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gksdud bundle with open -n so the probe has its accessibility permission.") }
+    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gkdl bundle with open -n so the probe has its accessibility permission.") }
     let saved = UserDefaults.standard
     let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
-    guard NSRunningApplication.runningApplications(withBundleIdentifier: "io.gksdud.inputswitch").contains(where: { $0.processIdentifier != getpid() }),
-          saved.object(forKey: "active") == nil || saved.bool(forKey: "active") else { throw failure(2, "Run gksdud with activation on first.") }
-    let suite = "io.gksdud.sources-probe.\(UUID().uuidString)"
+    guard NSRunningApplication.runningApplications(withBundleIdentifier: "kr.twentyoz.gkdl").contains(where: { $0.processIdentifier != getpid() }),
+          saved.object(forKey: "active") == nil || saved.bool(forKey: "active") else { throw failure(2, "Run gkdl with activation on first.") }
+    let suite = "kr.twentyoz.gkdl.sources-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     let enabled = delegate.enabledSources()
@@ -897,7 +906,7 @@ func probeInputSources() throws {
     let keys = ["addedSources", "addedSourceMode", "cycleSources", "separateSource", "separateKey"]
     let backup = keys.map { saved.object(forKey: $0) }
     let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 140), styleMask: [.titled], backing: .buffered, defer: false)
-    panel.title = "gksdud 입력 소스 추가 실험"
+    panel.title = "gkdl 입력 소스 추가 실험"
     let text = NSTextView(frame: NSRect(x: 10, y: 10, width: 500, height: 120)); text.font = .systemFont(ofSize: 24)
     panel.contentView!.addSubview(text); panel.center()
     let previousApp = NSWorkspace.shared.frontmostApplication
@@ -923,7 +932,7 @@ func probeInputSources() throws {
             throw failure(4, "The probe window lost focus to \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"); no more keys were sent.")
         }
     }
-    // Through the HID stream, so the running gksdud's tap and the system shortcut see it.
+    // Through the HID stream, so the running gkdl's tap and the system shortcut see it.
     func press(_ code: Int, _ flags: CGEventFlags = []) throws {
         try focus()
         for down in [true, false] {

@@ -171,7 +171,7 @@ func runSelfTest() {
     precondition(shiftSpace(), "A new Shift switches again")
     space.note(type: .keyDown, code: Int64(kVK_ANSI_A), flags: .maskShift)
     precondition(spaceKey(true, .maskControl).switchNow && spaceKey(false, .maskControl).consume, "Other combinations ignore what Shift typed")
-    let comboSuiteName = "io.gksdud.space-combo-test.\(UUID().uuidString)"
+    let comboSuiteName = "kr.twentyoz.gkdl.space-combo-test.\(UUID().uuidString)"
     let comboSuite = UserDefaults(suiteName: comboSuiteName)!
     let comboEngine = Engine(defaults: comboSuite)
     comboEngine.defaultSources = [spaceCombos[1], 1, sources[2]]
@@ -185,10 +185,10 @@ func runSelfTest() {
     precondition(comboEngine.chosenCombos.isEmpty, "Combinations stop with activation")
     comboSuite.removePersistentDomain(forName: comboSuiteName)
     print("PASS: Space combinations with one exact modifier, claimed repeats and release, unchosen and inactive pass-through, missed release, Space after capitals under Shift")
-    let suiteName = "io.gksdud.inputswitch.defaults-test.\(UUID().uuidString)"
+    let suiteName = "kr.twentyoz.gkdl.defaults-test.\(UUID().uuidString)"
     let suite = UserDefaults(suiteName: suiteName)!
     let preferences = Engine(defaults: suite)
-    precondition(preferences.testInputText == "한dud한dud한dud한dud")
+    precondition(preferences.testInputText == "하이 hi 하이 hi")
     preferences.testInputText = "한영 테스트 ABC"
     precondition(Engine(defaults: UserDefaults(suiteName: suiteName)!).testInputText == "한영 테스트 ABC")
     preferences.testInputText = ""
@@ -243,7 +243,7 @@ func runSelfTest() {
 }
 
 func runIntegrationTest() {
-    let suiteName = "io.gksdud.inputswitch.test.\(UUID().uuidString)"
+    let suiteName = "kr.twentyoz.gkdl.test.\(UUID().uuidString)"
     let suite = UserDefaults(suiteName: suiteName)!
     let engine = Engine(defaults: suite)
     defer { try? engine.restore(); suite.removePersistentDomain(forName: suiteName) }
@@ -259,7 +259,7 @@ func runIntegrationTest() {
         precondition(nativeMenuVisible() == false)
         suite.set(true, forKey: "hidden")
         try engine.updateSystemInputMenu()
-        precondition(nativeMenuVisible() == userMenu, "Hidden gksdud must leave the native input menu as the user had it")
+        precondition(nativeMenuVisible() == userMenu, "Hidden gkdl must leave the native input menu as the user had it")
         suite.set(false, forKey: "hidden")
         try engine.updateSystemInputMenu()
         precondition(nativeMenuVisible() == false)

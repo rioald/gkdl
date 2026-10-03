@@ -11,8 +11,8 @@ new_requirement=$(requirement "$second")
 for bundle in "$first" "$second"; do
   codesign --verify --all-architectures --strict -R "=$old_requirement" "$bundle"
 done
-first_hash=$(shasum -a 256 "$first/Contents/MacOS/gksdud" | cut -d ' ' -f 1)
-second_hash=$(shasum -a 256 "$second/Contents/MacOS/gksdud" | cut -d ' ' -f 1)
+first_hash=$(shasum -a 256 "$first/Contents/MacOS/gkdl" | cut -d ' ' -f 1)
+second_hash=$(shasum -a 256 "$second/Contents/MacOS/gkdl" | cut -d ' ' -f 1)
 [[ "$first_hash" != "$second_hash" ]]
 echo "PASS: different signed binaries satisfy the same certificate-bound designated requirement."
 echo "$old_requirement"

@@ -23,11 +23,11 @@ struct AppRelease: Codable {
     var pageURL: URL? {
         guard let url = URL(string: html_url), url.scheme == "https", url.host == "github.com",
               url.user == nil, url.password == nil,
-              url.path.hasPrefix("/codingnoye/gksdud/releases/tag/") else { return nil }
+              url.path.hasPrefix("/rioald/gkdl/releases/tag/") else { return nil }
         return url
     }
     var versionString: String { tag_name.hasPrefix("v") ? String(tag_name.dropFirst()) : tag_name }
-    var archiveName: String { "gksdud-\(versionString)-macos-universal.zip" }
+    var archiveName: String { "gkdl-\(versionString)-macos-universal.zip" }
     var eligible: Bool { !draft && !prerelease && pageURL != nil && ReleaseVersion(versionString) != nil }
     func isNewer(than installed: String) -> Bool {
         guard eligible,
@@ -86,12 +86,12 @@ final class UpdateChecker {
         checking = true; error = nil
         defaults.set(date.addingTimeInterval(3600), forKey: "updates.nextCheck")
         onChange?()
-        var request = URLRequest(url: URL(string: "https://api.github.com/repos/codingnoye/gksdud/releases/latest")!)
+        var request = URLRequest(url: URL(string: "https://api.github.com/repos/rioald/gkdl/releases/latest")!)
         request.timeoutInterval = 20
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-        request.setValue("gksdud/\(installedVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("gkdl/\(installedVersion)", forHTTPHeaderField: "User-Agent")
         fetch(request) { [weak self] data, response, failure in
             DispatchQueue.main.async {
                 guard let self else { return }

@@ -75,8 +75,8 @@ func runManualCorrectionTests() {
     featureCheck(!CorrectionFieldPolicy.isTerminalInputProxy(domClasses: ["textarea", "xterm-helper-textarea-copy"]), "Ordinary web fields never receive terminal deletion keys")
     let terminalBoundary = TerminalInputBoundary(caret: 12, line: 3)
     featureCheck(TerminalCorrectionTracker.wordStartKeys.contains(18) && TerminalCorrectionTracker.wordStartKeys.contains(83), "Capture terminal boundary before a leading digit on either keyboard row")
-    featureCheck(terminalBoundary.permits(.init(tail: "gksdud-test> 10qnsenldp", caret: 22), suffix: "10qnsenldp", line: 3))
-    featureCheck(terminalBoundary.permits(.init(tail: "gksdud-test> Whsemrznzl", caret: 22), suffix: "Whsemrznzl", line: 3))
+    featureCheck(terminalBoundary.permits(.init(tail: "gkdl-test> 10qnsenldp", caret: 22), suffix: "10qnsenldp", line: 3))
+    featureCheck(terminalBoundary.permits(.init(tail: "gkdl-test> Whsemrznzl", caret: 22), suffix: "Whsemrznzl", line: 3))
     featureCheck(!terminalBoundary.permits(.init(tail: "Password: ", caret: 12), suffix: "Password: ", line: 3), "No-echo password input never advances the visible cursor")
     featureCheck(!terminalBoundary.permits(.init(tail: "promptword", caret: 15), suffix: "promptword", line: 3), "Never erase text before typing began")
     featureCheck(!terminalBoundary.permits(.init(tail: "Whsemrznzl", caret: 22), suffix: "Whsemrznzl", line: 4), "Changed terminal output line cancels conversion")
@@ -198,7 +198,7 @@ func runCorrectionEditorTests() {
     app.setActivationPolicy(.accessory)
     let window = NSWindow(contentRect: NSRect(x: 80, y: 80, width: 440, height: 240),
                           styleMask: [.titled], backing: .buffered, defer: false)
-    window.title = "gksdud 입력창 검증"
+    window.title = "gkdl 입력창 검증"
     window.isReleasedWhenClosed = false
     window.makeKeyAndOrderFront(nil)
     app.activate(ignoringOtherApps: true)

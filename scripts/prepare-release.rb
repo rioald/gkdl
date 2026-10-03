@@ -1,10 +1,9 @@
 #!/usr/bin/env ruby
-# Creates local release metadata only; never uploads or changes system settings.
+# Verify a signed, stapled release locally. Never publishes or changes system settings.
 require 'digest'
 require 'fileutils'
 require 'open3'
 require 'tmpdir'
-require 'openssl'
 require_relative 'release-metadata'
 
 def capture!(*args)
@@ -13,71 +12,38 @@ def capture!(*args)
   output.strip
 end
 
-repo = ARGV.fetch(0, '')
-abort 'Usage: ruby scripts/prepare-release.rb OWNER/REPO [archive.zip]' unless
-  ARGV.length.between?(1, 2) && repo.match?(/\A[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*\z/)
-root = File.expand_path(ENV.fetch('GKSDUD_SOURCE_ROOT', File.expand_path('..', __dir__)))
-version = ENV.fetch('GKSDUD_APP_VERSION') { capture!('/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleShortVersionString', "#{root}/Info.plist") }
-metadata = ReleaseMetadata.new(version, ENV.fetch('GKSDUD_RELEASE_TAG', "v#{version}"))
-filename = metadata.filename
-archive = File.expand_path(ARGV[1] || "#{root}/outputs/#{filename}")
-abort "Missing archive: #{archive}" unless File.file?(archive)
-abort "Release asset must be named #{filename}" unless File.basename(archive) == filename
-certificate = "#{root}/signing/local-certificate.pem"
-abort 'Missing publisher public certificate' unless File.file?(certificate)
-fingerprint = OpenSSL::Digest::SHA1.hexdigest(OpenSSL::X509::Certificate.new(File.read(certificate)).to_der)
-requirement = "identifier \"io.gksdud.inputswitch\" and certificate leaf = H\"#{fingerprint}\""
+abort 'Usage: ruby scripts/prepare-release.rb archive.zip' unless ARGV.length == 1
+root = File.expand_path('..', __dir__)
+version = capture!('/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleShortVersionString', "#{root}/Info.plist")
+metadata = ReleaseMetadata.new(version)
+archive = File.expand_path(ARGV[0])
+abort 'Missing release archive' unless File.file?(archive)
+abort "Release asset must be named #{metadata.filename}" unless File.basename(archive) == metadata.filename
+requirement = '=identifier "kr.twentyoz.gkdl" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "KTC97BHY7R"'
 
-Dir.mktmpdir('gksdud-release-') do |stage|
-  # Validate ZIP paths before extracting an explicitly selected build artifact.
-  entries = capture!('/usr/bin/unzip', '-Z1', archive).lines.map(&:strip)
-  abort 'Unexpected ZIP contents' unless entries.all? { |p| p.start_with?('gksdud.app/') && !p.split('/').include?('..') }
+Dir.mktmpdir('gkdl-release-') do |stage|
+  ReleaseArchive.validate_listing!(capture!('/usr/bin/unzip', '-Z1', archive), capture!('/usr/bin/unzip', '-Z', '-l', archive))
   capture!('/usr/bin/ditto', '-x', '-k', archive, stage)
-  app = "#{stage}/gksdud.app"
-  license = "#{app}/Contents/Resources/LICENSE"
-  abort 'Archive must include the current LICENSE' unless File.file?(license) &&
-    File.binread(license) == File.binread("#{root}/LICENSE")
-  capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', "=#{requirement}", app)
-  %w[CFBundleShortVersionString CFBundleVersion CFBundleIdentifier].each do |key|
+  app = "#{stage}/gkdl.app"
+  %w[LICENSE NOTICE].each do |name|
+    bundled = "#{app}/Contents/Resources/#{name}"
+    abort "Archive must include the current #{name}" unless File.file?(bundled) && File.binread(bundled) == File.binread("#{root}/#{name}")
+  end
+  capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', requirement, app)
+  %w[CFBundleShortVersionString CFBundleVersion CFBundleIdentifier CFBundleExecutable].each do |key|
     expected = capture!('/usr/libexec/PlistBuddy', '-c', "Print :#{key}", "#{root}/Info.plist")
-    expected = version if key == 'CFBundleShortVersionString'
     actual = capture!('/usr/libexec/PlistBuddy', '-c', "Print :#{key}", "#{app}/Contents/Info.plist")
     abort "Archive #{key} does not match source" unless expected == actual
   end
-  arches = capture!('/usr/bin/lipo', '-archs', "#{app}/Contents/MacOS/gksdud").split
+  arches = capture!('/usr/bin/lipo', '-archs', "#{app}/Contents/MacOS/gkdl").split
   abort 'Expected arm64 + x86_64' unless arches.sort == %w[arm64 x86_64]
+  signature = capture!('/usr/bin/codesign', '-d', '--verbose=4', app)
+  abort 'Secure timestamp and hardened runtime required' unless signature.match?(/^Timestamp=/) && signature.match?(/flags=.*\(runtime\)/)
+  capture!('/usr/bin/xcrun', 'stapler', 'validate', app)
+  capture!('/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=2', app)
 end
 
-sha256 = Digest::SHA256.file(archive).hexdigest
-output = "#{root}/outputs/release-#{metadata.asset_version}"
-FileUtils.mkdir_p(output)
-File.write("#{output}/SHA256SUMS", "#{sha256}  #{filename}\n")
-# Prereleases are direct downloads only; never prepare a stable Homebrew cask.
-unless metadata.prerelease?
-  File.write("#{output}/gksdud.rb", <<~CASK)
-  cask "gksdud" do
-    version "#{version}"
-    sha256 "#{sha256}"
-
-    url "https://github.com/#{repo}/releases/download/v\#{version}/gksdud-\#{version}-macos-universal.zip"
-    name "gksdud"
-    desc "Korean-English input switching from the menu bar"
-    homepage "https://github.com/#{repo}"
-
-    depends_on macos: :ventura
-
-    app "gksdud.app"
-
-    uninstall quit: "io.gksdud.inputswitch"
-
-    caveats <<~EOS
-      This build is self-signed and is not notarized by Apple.
-      macOS may block its first launch. No security settings are changed by this cask.
-      Accessibility permission is required for switching on key press.
-      If Homebrew cannot quit gksdud, quit it normally to restore keyboard settings.
-    EOS
-  end
-CASK
-end
-puts "Verified archive. Metadata: #{output}"
-puts 'Not published. Test Gatekeeper, fresh installation, and upgrades on a separate Mac before release.'
+checksum = "#{Digest::SHA256.file(archive).hexdigest}  #{metadata.filename}\n"
+sums = File.join(File.dirname(archive), 'SHA256SUMS')
+abort 'SHA256SUMS does not match the verified archive' unless File.file?(sums) && File.read(sums) == checksum
+puts "Verified: #{metadata.filename} (TWENTYOZ Developer ID, Universal, notarization ticket, Gatekeeper, SHA256)"

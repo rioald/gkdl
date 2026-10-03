@@ -26,7 +26,7 @@ extension AppRelease {
               let asset = matches.first, asset.size > 0, asset.size <= limit,
               let url = URL(string: asset.browser_download_url), url.scheme == "https", url.host == "github.com",
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
-              url.path == "/codingnoye/gksdud/releases/download/\(tag_name)/\(name)" else {
+              url.path == "/rioald/gkdl/releases/download/\(tag_name)/\(name)" else {
             throw UpdateFailure("업데이트 파일을 찾지 못했습니다. 릴리스 페이지를 확인해주세요.")
         }
         return url
@@ -66,7 +66,7 @@ enum UpdateProcessLauncher {
         deadline = ProcessInfo.processInfo.systemUptime + 2
         while process.isRunning, ProcessInfo.processInfo.systemUptime < deadline { pump() }
         guard !process.isRunning else {
-            throw UpdateProcessStillRunning(message: "새 앱을 종료하지 못했습니다. gksdud를 종료한 뒤 다시 시도해주세요.")
+            throw UpdateProcessStillRunning(message: "새 앱을 종료하지 못했습니다. gkdl을 종료한 뒤 다시 시도해주세요.")
         }
         process.waitUntilExit()
     }
@@ -76,7 +76,7 @@ enum UpdateProcessLauncher {
 // The installer has no signing secrets and never modifies signature requirements.
 // A new bundle must satisfy the currently installed app's certificate-bound identity.
 enum UpdateValidation {
-    static let identifier = "io.gksdud.inputswitch"
+    static let identifier = "kr.twentyoz.gkdl"
     static let strict = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
     static func signedCode(_ path: URL) throws -> SecStaticCode {
         var code: SecStaticCode?
@@ -134,7 +134,7 @@ enum UpdateValidation {
         let entries = names.split(separator: "\n", omittingEmptySubsequences: true)
         guard !entries.isEmpty, entries.count <= 5000,
               entries.allSatisfy({ name in
-                  (name == "gksdud.app/" || name.hasPrefix("gksdud.app/")) && !name.contains("\\")
+                  (name == "gkdl.app/" || name.hasPrefix("gkdl.app/")) && !name.contains("\\")
                       && !name.split(separator: "/").contains("..") && !name.contains("\r")
               }) else { throw UpdateFailure("업데이트 압축 파일의 경로가 올바르지 않습니다.") }
         // This app's archives contain only regular files/directories. Reject links
@@ -170,9 +170,9 @@ enum AppReplacement {
                         launch: (URL) throws -> Void, move: (URL, URL) throws -> Void = { try FileManager.default.moveItem(at: $0, to: $1) }) throws {
         let fm = FileManager.default, parent = installed.deletingLastPathComponent()
         let token = UUID().uuidString
-        let stage = parent.appendingPathComponent(".gksdud-update-\(token).app")
-        let backup = parent.appendingPathComponent(".gksdud-rollback-\(token).app")
-        let failed = parent.appendingPathComponent(".gksdud-failed-\(token).app")
+        let stage = parent.appendingPathComponent(".gkdl-update-\(token).app")
+        let backup = parent.appendingPathComponent(".gkdl-rollback-\(token).app")
+        let failed = parent.appendingPathComponent(".gkdl-failed-\(token).app")
         guard fm.isWritableFile(atPath: parent.path), fm.isWritableFile(atPath: installed.path) else {
             throw UpdateFailure("앱 설치 폴더에 쓰기 권한이 없습니다. 쓰기 가능한 응용 프로그램 폴더에서 다시 시도해주세요.")
         }
@@ -227,7 +227,7 @@ final class UpdateInstaller: @unchecked Sendable {
                 let name = release.archiveName
                 let archiveURL = try release.assetURL(named: name, limit: 100_000_000)
                 let checksumURL = try release.assetURL(named: "SHA256SUMS", limit: 100_000)
-                let directory = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("gksdud-update-\(UUID().uuidString)", isDirectory: true)
+                let directory = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("gkdl-update-\(UUID().uuidString)", isDirectory: true)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
                 workspace = directory
                 let archive = directory.appendingPathComponent(name)
@@ -242,7 +242,7 @@ final class UpdateInstaller: @unchecked Sendable {
                 let expanded = directory.appendingPathComponent("expanded", isDirectory: true)
                 try FileManager.default.createDirectory(at: expanded, withIntermediateDirectories: false)
                 try UpdateValidation.command("/usr/bin/ditto", ["-x", "-k", archive.path, expanded.path])
-                let candidate = expanded.appendingPathComponent("gksdud.app", isDirectory: true)
+                let candidate = expanded.appendingPathComponent("gkdl.app", isDirectory: true)
                 try UpdateValidation.candidate(candidate, installed: installed, version: release.versionString)
                 let prepared = PreparedUpdate(directory: directory, candidate: candidate, version: release.versionString)
                 DispatchQueue.main.async {
@@ -277,9 +277,9 @@ final class UpdateInstaller: @unchecked Sendable {
         let workspace = URL(fileURLWithPath: arguments[2]).standardizedFileURL
         let candidate = URL(fileURLWithPath: arguments[3]).standardizedFileURL
         let installed = Bundle.main.bundleURL.resolvingSymlinksInPath()
-        guard workspace.lastPathComponent.hasPrefix("gksdud-update-"),
+        guard workspace.lastPathComponent.hasPrefix("gkdl-update-"),
               workspace.path == workspace.resolvingSymlinksInPath().path,
-              candidate.path == workspace.appendingPathComponent("expanded/gksdud.app").path,
+              candidate.path == workspace.appendingPathComponent("expanded/gkdl.app").path,
               candidate.path == candidate.resolvingSymlinksInPath().path,
               installed.pathExtension == "app" else { throw UpdateFailure("잘못된 업데이트 경로입니다.") }
         defer { try? FileManager.default.removeItem(at: workspace) }
@@ -297,27 +297,27 @@ final class UpdateInstaller: @unchecked Sendable {
                FileManager.default.fileExists(atPath: installed.path) { try? launchAndCheck(installed) }
             // Show an actionable error after the main app has exited; never silently
             // leave the user without either the old app or its backup location.
-            let alert = NSAlert(); alert.messageText = "gksdud 업데이트"; alert.informativeText = error.localizedDescription
+            let alert = NSAlert(); alert.messageText = "gkdl 업데이트"; alert.informativeText = error.localizedDescription
             alert.runModal()
             throw error
         }
     }
     private static func launchAndCheck(_ url: URL) throws {
         let fm = FileManager.default
-        let directory = fm.temporaryDirectory.appendingPathComponent("gksdud-launch-\(UUID().uuidString)")
+        let directory = fm.temporaryDirectory.appendingPathComponent("gkdl-launch-\(UUID().uuidString)")
         try fm.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? fm.removeItem(at: directory) }
         let receipt = directory.appendingPathComponent("ready")
         var environment = ProcessInfo.processInfo.environment
-        environment["GKSDUD_UPDATE_READY"] = receipt.path
-        try UpdateProcessLauncher.launch(executable: url.appendingPathComponent("Contents/MacOS/gksdud"), environment: environment) {
+        environment["GKDL_UPDATE_READY"] = receipt.path
+        try UpdateProcessLauncher.launch(executable: url.appendingPathComponent("Contents/MacOS/gkdl"), environment: environment) {
             (try? String(contentsOf: receipt, encoding: .utf8)) == String($0.processIdentifier)
         }
     }
     static func acknowledgeLaunch() {
-        guard let path = ProcessInfo.processInfo.environment["GKSDUD_UPDATE_READY"] else { return }
+        guard let path = ProcessInfo.processInfo.environment["GKDL_UPDATE_READY"] else { return }
         let url = URL(fileURLWithPath: path)
-        guard url.lastPathComponent == "ready", url.deletingLastPathComponent().lastPathComponent.hasPrefix("gksdud-launch-") else { return }
+        guard url.lastPathComponent == "ready", url.deletingLastPathComponent().lastPathComponent.hasPrefix("gkdl-launch-") else { return }
         try? String(getpid()).write(to: url, atomically: true, encoding: .utf8)
     }
 }

@@ -81,7 +81,7 @@ struct ShortcutPreferences {
         let domain = "com.apple.symbolichotkeys" as CFString
         CFPreferencesSetAppValue("AppleSymbolicHotKeys" as CFString, keys as CFDictionary, domain)
         guard CFPreferencesAppSynchronize(domain) else {
-            throw NSError(domain: "gksdud", code: 1, userInfo: [NSLocalizedDescriptionKey: "입력 소스 단축키를 저장하지 못했습니다."])
+            throw NSError(domain: "gkdl", code: 1, userInfo: [NSLocalizedDescriptionKey: "입력 소스 단축키를 저장하지 못했습니다."])
         }
     }, activate: {
         let process = Process()
@@ -91,7 +91,7 @@ struct ShortcutPreferences {
         process.arguments = ["-u", "-virtualSession"]
         try process.run(); process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw NSError(domain: "gksdud", code: 2, userInfo: [NSLocalizedDescriptionKey: "단축키 활성화에 실패했습니다. 다시 시도해주세요."])
+            throw NSError(domain: "gkdl", code: 2, userInfo: [NSLocalizedDescriptionKey: "단축키 활성화에 실패했습니다. 다시 시도해주세요."])
         }
     })
 }
@@ -109,7 +109,7 @@ struct InputMenuPreference {
         let domain = "com.apple.TextInputMenu" as CFString
         CFPreferencesSetAppValue("visible" as CFString, value, domain)
         guard CFPreferencesAppSynchronize(domain) else {
-            throw NSError(domain: "gksdud", code: 10, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴 표시 설정을 저장하지 못했습니다."])
+            throw NSError(domain: "gkdl", code: 10, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴 표시 설정을 저장하지 못했습니다."])
         }
         // This system agent is KeepAlive-managed by launchd; restart only it to reload preferences.
         let process = Process()
@@ -118,7 +118,7 @@ struct InputMenuPreference {
         process.standardError = FileHandle.nullDevice
         try process.run(); process.waitUntilExit()
         guard process.terminationStatus == 0 || process.terminationStatus == 1 else {
-            throw NSError(domain: "gksdud", code: 11, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴를 새로 고치지 못했습니다."])
+            throw NSError(domain: "gkdl", code: 11, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴를 새로 고치지 못했습니다."])
         }
     })
 }
@@ -221,7 +221,7 @@ final class Engine {
         return (fallback ?? defaultSources).contains(key) || keyboards.maps(key, default: fallback ?? defaultSources)
     }
     var testInputText: String {
-        get { defaults.string(forKey: "testInputText") ?? "한dud한dud한dud한dud" }
+        get { defaults.string(forKey: "testInputText") ?? "하이 hi 하이 hi" }
         set { defaults.set(newValue, forKey: "testInputText") }
     }
     var target: TargetKey { targets.first { $0.name == defaults.string(forKey: "target") } ?? targets[6] }
@@ -475,20 +475,20 @@ let capsSafeKorean = "com.apple.inputmethod.Korean.2SetKorean"
 func setCapsLock(_ enabled: Bool) throws {
     let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"))
     guard service != IO_OBJECT_NULL else {
-        throw NSError(domain: "gksdud", code: 20, userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 장치를 찾지 못했습니다."])
+        throw NSError(domain: "gkdl", code: 20, userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 장치를 찾지 못했습니다."])
     }
     defer { IOObjectRelease(service) }
     var connection: io_connect_t = 0
     let opened = IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connection)
     guard opened == KERN_SUCCESS else {
-        throw NSError(domain: "gksdud", code: Int(opened), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 연결에 실패했습니다."])
+        throw NSError(domain: "gkdl", code: Int(opened), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 연결에 실패했습니다."])
     }
     defer { IOServiceClose(connection) }
     // No readback: right after a change that took effect it can still report the old state. The restore checks after a
     // switch catch a change that did not.
     let result = IOHIDSetModifierLockState(connection, Int32(kIOHIDCapsLockState), enabled)
     guard result == KERN_SUCCESS else {
-        throw NSError(domain: "gksdud", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 상태를 변경하지 못했습니다."])
+        throw NSError(domain: "gkdl", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 상태를 변경하지 못했습니다."])
     }
 }
 
@@ -588,7 +588,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let koreanPreview = NSImageView()
     let englishPreview = NSImageView()
     var iconStyle: Int { let value = engine.defaults.integer(forKey: "iconStyle"); return (0...3).contains(value) ? value : 0 }
-    func iconLabel(korean: Bool) -> String { korean ? (iconStyle == 2 ? "KO" : "한") : ["dud", "A", "EN", "캐릭터"][iconStyle] }
+    func iconLabel(korean: Bool) -> String { korean ? ["한", "한", "KO", "하"][iconStyle] : ["hi", "A", "EN", "hi"][iconStyle] }
     let enabled = NSButton(checkboxWithTitle: "활성화", target: nil, action: nil)
     let login = NSButton(checkboxWithTitle: "로그인 시 시작", target: nil, action: nil)
     let showInMenuBar = NSButton(checkboxWithTitle: "메뉴바에 표시", target: nil, action: nil)
@@ -774,7 +774,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func updatePressAccess() {
         addedSources.refresh()
         let trusted = engine.accessibilityTrusted()
-        // Switching needs the tap, so without Accessibility only the permission button and the gksdud tab can be used.
+        // Switching needs the tap, so without Accessibility only the permission button and the gkdl tab can be used.
         for control: NSControl in [enabled, login, showInMenuBar, iconPicker, picker, advancedButton] + specialButtons { control.isEnabled = trusted }
         // Only this app's icon can replace the Mac input menu.
         replaceInputMenu.state = engine.replacesInputMenu ? .on : .off
@@ -1045,8 +1045,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func applicationDidFinishLaunching(_ notification: Notification) {
         terminalCorrection.frontmostChanged()
         let mainMenu = NSMenu()
-        let appEntry = NSMenuItem(); let appMenu = NSMenu(title: "gksdud")
-        appMenu.addItem(withTitle: "gksdud 종료", action: #selector(quit), keyEquivalent: "q").target = self
+        let appEntry = NSMenuItem(); let appMenu = NSMenu(title: "gkdl")
+        appMenu.addItem(withTitle: "gkdl 종료", action: #selector(quit), keyEquivalent: "q").target = self
         appEntry.submenu = appMenu; mainMenu.addItem(appEntry)
         let editEntry = NSMenuItem(); let editMenu = NSMenu(title: "편집")
         for (title, action, key) in [("잘라내기", "cut:", "x"), ("복사", "copy:", "c"), ("붙여넣기", "paste:", "v"), ("모두 선택", "selectAll:", "a")] {
@@ -1153,9 +1153,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
-        let brandEntry = NSMenuItem(title: "gksdud", action: #selector(menuBrand), keyEquivalent: "")
-        brandEntry.attributedTitle = NSAttributedString(string: "gksdud", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .heavy), .kern: 0.6])
-        brandEntry.image = DudIcon.badge(korean: false)
+        let brandEntry = NSMenuItem(title: "gkdl", action: #selector(menuBrand), keyEquivalent: "")
+        brandEntry.attributedTitle = NSAttributedString(string: "gkdl", attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .heavy), .kern: 0.6])
+        brandEntry.image = GkdlIcon.badge(korean: false)
         brandEntry.target = self
         brandEntry.isEnabled = true
         menu.addItem(brandEntry)
@@ -1183,7 +1183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     @objc func menuBrand() { showAbout() }
     func sourceMenuIcon(korean: Bool) -> NSImage {
-        iconStyle == 3 ? DudIcon.badge(korean: korean) : badgeImage(label: iconLabel(korean: korean), filled: korean)
+        iconStyle == 3 ? GkdlIcon.badge(korean: korean) : badgeImage(label: iconLabel(korean: korean), filled: korean)
     }
     @objc func changeIconStyle() {
         engine.defaults.set(iconPicker.indexOfSelectedItem, forKey: "iconStyle")
@@ -1277,8 +1277,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let button = item?.button else { return }
         if button.image !== badge { button.title = ""; button.image = badge; button.imagePosition = .imageOnly }
         let warning = engine.keyboards.warning.map { "\n\($0)" } ?? ""
-        let tip = "gksdud · 현재 입력 소스: \(lang)\(warning)"
-        let spoken = "gksdud, 현재 입력 \(korean ? "한국어" : lang.hasPrefix("en") ? "영어" : label)\(warning)"
+        let tip = "gkdl · 현재 입력 소스: \(lang)\(warning)"
+        let spoken = "gkdl, 현재 입력 \(korean ? "한국어" : lang.hasPrefix("en") ? "영어" : label)\(warning)"
         if button.toolTip != tip { button.toolTip = tip }
         if button.accessibilityLabel() != spoken { button.setAccessibilityLabel(spoken) }
     }
@@ -1447,7 +1447,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             : !stickyError.isEmpty ? stickyError
             : !engine.chosenCombos.isEmpty && !AXIsProcessTrusted() ? "조합 키를 쓰려면 접근성 권한을 허용하세요."
             : engine.active && result.selected == 0 && !engine.mappedSources.isEmpty ? "적용할 키보드 연결 대기 중"
-            : window.isVisible && login.state == .on && SMAppService.mainApp.status == .requiresApproval ? "시스템 설정 → 로그인 항목에서 gksdud를 허용하세요." : ""
+            : window.isVisible && login.state == .on && SMAppService.mainApp.status == .requiresApproval ? "시스템 설정 → 로그인 항목에서 gkdl을 허용하세요." : ""
     }
     var lastError = ""
     var stickyError = ""

@@ -4,7 +4,7 @@
 //   sudo build/vhid-keys build/vhid.sock
 //
 // Commands, one per line: "down <key>", "up <key>", "release", "ping", "quit". Each gets "ok" or "error <why>".
-// The keyboard uses the vendor/product of Karabiner-Elements' own virtual keyboard, so gksdud treats it as that
+// The keyboard uses the vendor/product of Karabiner-Elements' own virtual keyboard, so gkdl treats it as that
 // keyboard (same saved preference and mapping). It is destroyed when this helper exits.
 
 #include <atomic>

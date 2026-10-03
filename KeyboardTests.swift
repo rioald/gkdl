@@ -2,7 +2,7 @@ import AppKit
 
 #if TESTS
 func runSettingsReentrancyTests() throws {
-    let suite = "io.gksdud.reentrancy-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.reentrancy-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     defaults.set(false, forKey: "active")
@@ -62,7 +62,7 @@ func runShortcutRestoreTests() throws {
     func entry(_ code: Int = 80, flags: Int = 0, enabled: Bool = true) -> [String: Any] {
         ["enabled": enabled, "value": ["type": "standard", "parameters": [65535, code, flags]]]
     }
-    let suite = "io.gksdud.shortcut-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.shortcut-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let otherEntry = entry(49, flags: 262144)
@@ -144,7 +144,7 @@ func runShortcutRestoreTests() throws {
 // Quitting undoes this app's changes to macOS, but logout or restart can end it with SIGTERM at any step, so the saved
 // activation choice must already be the user's at each one. The Mac input menu is this app's only while its icon replaces it.
 func runExitTests() throws {
-    let suite = "io.gksdud.exit-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.exit-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let original: [String: Any] = ["enabled": true, "value": ["type": "standard", "parameters": [32, 49, 262144]]]
@@ -266,7 +266,7 @@ final class TestKeyboard: KeyboardDevice {
 func runKeyboardTests() {
     func mapping(_ source: UInt64, _ target: UInt64) -> Mapping { [srcKey: NSNumber(value: source), dstKey: NSNumber(value: target)] }
     let command = sources[0], option = sources[1]
-    let suiteName = "io.gksdud.keyboard-tests.\(UUID().uuidString)"
+    let suiteName = "kr.twentyoz.gkdl.keyboard-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let first = TestKeyboard("1", mappings: [mapping(option, targets[5].usage)])
@@ -420,7 +420,7 @@ func runKeyboardTests() {
         && comboOnly.mappings.isEmpty && manager.records[comboOnly.registryID] == nil, "With only combinations, keyboards get their own keys back")
     manager.setSources([spaceCombos[0], option], for: comboOnly.identity.key)
     precondition(manager.known[comboOnly.identity.key]?.sources == [option], "A keyboard's own keys cannot hold combinations")
-    let savedSuite = "io.gksdud.saved-keys-tests.\(UUID().uuidString)"
+    let savedSuite = "kr.twentyoz.gkdl.saved-keys-tests.\(UUID().uuidString)"
     let savedDefaults = UserDefaults(suiteName: savedSuite)!
     defer { savedDefaults.removePersistentDomain(forName: savedSuite) }
     for (saved, expected): ([UInt64], [UInt64]) in [([], [command]), ([1], [command]), ([1, capsLock, option], [option, capsLock])] {
@@ -464,7 +464,7 @@ func runKeyboardTests() {
 func runRightControlTests() {
     func mapping(_ source: UInt64, _ target: UInt64) -> Mapping { [srcKey: NSNumber(value: source), dstKey: NSNumber(value: target)] }
     let rightControl: UInt64 = 0x7000000e4, leftControl: UInt64 = 0x7000000e0
-    let suite = "io.gksdud.right-control-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.right-control-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let original = [mapping(leftControl, 0x7000000e2), mapping(rightControl, 0x7000000e3)]
@@ -502,7 +502,7 @@ func runRightControlTests() {
 // The lock screen gets the keyboards' own keys back without turning activation off; unlocking maps them again.
 func runSessionAwayTests() {
     func mapping(_ source: UInt64, _ target: UInt64) -> Mapping { [srcKey: NSNumber(value: source), dstKey: NSNumber(value: target)] }
-    let suite = "io.gksdud.session-away-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.session-away-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let original = mapping(sources[2], 0x7000000e0)
@@ -545,7 +545,7 @@ func runSessionAwayTests() {
 // Warnings are answered in order without a modal loop; nothing may reach system settings.
 func runCapsLockKeyTests() {
     _ = NSApplication.shared
-    let suite = "io.gksdud.caps-key-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.caps-key-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("caps-key-1", name: "Keyboard", serial: "caps-key"), key = keyboard.identity.key
@@ -611,7 +611,7 @@ func renderKeyboardUI(to directory: String) throws {
     app.setActivationPolicy(.accessory)
     // Rendering must not depend on this process's Accessibility permission.
     SourcePicker.combosAvailable = { true }
-    let suiteName = "io.gksdud.ui-preview.\(UUID().uuidString)"
+    let suiteName = "kr.twentyoz.gkdl.ui-preview.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defer { defaults.removePersistentDomain(forName: suiteName) }
     let builtIn = TestKeyboard("preview-1", name: "Apple Internal Keyboard / Trackpad", serial: "builtin")
@@ -626,7 +626,7 @@ func renderKeyboardUI(to directory: String) throws {
     devices = [builtIn, virtual]
     virtual.mappings = []; virtual.failWrite = true
     for _ in 0..<3 { _ = engine.keyboards.reconcile(sources: [sources[0]], target: f19, active: true) }
-    let previewRelease = AppRelease(tag_name: "v9.0.0", html_url: "https://github.com/codingnoye/gksdud/releases/tag/v9.0.0", body: "## 요약\n- 설정을 일반·대소문자·특수문자·gksdud 탭으로 나눴습니다.\n- 한글에서도 Option 특수문자를 입력할 수 있습니다.\n- 새 버전이 나오면 메뉴에서 알려드립니다.\n\n## 설치\n요약에 나타나면 안 됩니다.", draft: false, prerelease: false)
+    let previewRelease = AppRelease(tag_name: "v9.0.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v9.0.0", body: "## 요약\n- 설정을 일반·대소문자·특수문자·gkdl 탭으로 나눴습니다.\n- 한글에서도 Option 특수문자를 입력할 수 있습니다.\n- 새 버전이 나오면 메뉴에서 알려드립니다.\n\n## 설치\n요약에 나타나면 안 됩니다.", draft: false, prerelease: false)
     defaults.set(try JSONEncoder().encode(previewRelease), forKey: "updates.release")
     let delegate = AppDelegate(engine: engine)
     delegate.updates = UpdateChecker(defaults: defaults)
@@ -691,7 +691,7 @@ func renderKeyboardUI(to directory: String) throws {
     precondition(!delegate.updateSummary.string.contains("요약에 나타나면"))
     delegate.updates = UpdateChecker(defaults: defaults, installedVersion: "9.0.0")
     delegate.refreshUpdates()
-    precondition(delegate.tabButtons[5].accessibilityLabel() == "gksdud 탭" && delegate.updateButton.isHidden && updateEntry.isHidden)
+    precondition(delegate.tabButtons[5].accessibilityLabel() == "gkdl 탭" && delegate.updateButton.isHidden && updateEntry.isHidden)
     defaults.set(false, forKey: "active")
     delegate.resetSelection()
     // Right Control goes last: the screenshots and later checks start from it.
@@ -909,7 +909,7 @@ func runSeparateKeyTests() {
     func mapping(_ source: UInt64, _ target: UInt64) -> Mapping { [srcKey: NSNumber(value: source), dstKey: NSNumber(value: target)] }
     func same(_ lhs: [Mapping], _ rhs: [Mapping]) -> Bool { KeyboardManager.canonical(lhs) == KeyboardManager.canonical(rhs) }
     let command = sources[0], option = sources[1], capsLock = sources[2], leftOption: UInt64 = 0x7000000e2, f18 = targets[5].usage
-    let suite = "io.gksdud.separate-key-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.separate-key-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("s1", serial: "separate", mappings: [mapping(option, leftOption)])
@@ -951,7 +951,7 @@ func runSeparateKeyTests() {
     precondition(taken.mappings == [mapping(capsLock, f18)])
 
     // Settings: the separate key maps only when it is a single key, a source is chosen, and the tap can act on it.
-    let engineSuite = "io.gksdud.separate-engine-tests.\(UUID().uuidString)"
+    let engineSuite = "kr.twentyoz.gkdl.separate-engine-tests.\(UUID().uuidString)"
     let engineDefaults = UserDefaults(suiteName: engineSuite)!
     defer { engineDefaults.removePersistentDomain(forName: engineSuite) }
     let engine = Engine(defaults: engineDefaults, discover: { [] })
@@ -985,7 +985,7 @@ func runSeparateKeyTests() {
 
 // The tap takes the separate key's F-key only while the separate key is mapped to it.
 func runSeparateKeyTapTests() {
-    let suite = "io.gksdud.separate-tap-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.separate-tap-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("st-1", name: "Keyboard", serial: "separate-tap")
@@ -1016,7 +1016,7 @@ func runSeparateKeyTapTests() {
 // Warnings when the separate key and a Korean/English key meet, from either side.
 func runSeparateKeyWarningTests() {
     _ = NSApplication.shared
-    let suite = "io.gksdud.separate-warning-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.separate-warning-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("sw-1", name: "Keyboard", serial: "separate-warning")
@@ -1112,10 +1112,10 @@ func runSeparateKeyWarningTests() {
     print("PASS: separate key against Korean/English keys from both sides, the keyboard sheet, Caps Lock in Korean, other mappings, system shortcuts, Caps Lock in Korean off with preservation")
 }
 // Without Accessibility there is nothing to switch with: activation turns off and only the permission button and the
-// gksdud tab stay usable. Granting it again leaves activation off until turned on.
+// gkdl tab stay usable. Granting it again leaves activation off until turned on.
 func runPermissionTests() {
     _ = NSApplication.shared
-    let suite = "io.gksdud.permission-tests.\(UUID().uuidString)"
+    let suite = "kr.twentyoz.gkdl.permission-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("perm-1", name: "Keyboard", serial: "permission")

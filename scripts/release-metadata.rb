@@ -20,12 +20,27 @@ class ReleaseMetadata
   end
 
   def filename
-    "gksdud-#{asset_version}-macos-universal.zip"
+    "gkdl-#{asset_version}-macos-universal.zip"
   end
 
   def outputs
     { version: version, tag: tag, prerelease: prerelease?,
       asset_version: asset_version, filename: filename }
+  end
+end
+
+module ReleaseArchive
+  def self.validate_listing!(names, listing)
+    entries = names.split("\n")
+    valid = !entries.empty? && entries.length <= 5000 && entries.all? do |name|
+      name.start_with?('gkdl.app/') && !name.include?('\\') && !name.include?("\r") && !name.split('/').include?('..')
+    end
+    raise ArgumentError, 'Unexpected ZIP paths' unless valid
+    modes = listing.lines.select { |line| line.match?(/\A.[rwxstST-]{9}\s/) }
+    raise ArgumentError, 'ZIP links or unexpected entries' unless modes.length == entries.length && modes.all? { |line| %w[- d].include?(line[0]) }
+    sizes = modes.map { |line| Integer(line.split.fetch(3)) }
+    raise ArgumentError, 'Invalid expanded ZIP size' unless sizes.all? { |size| size >= 0 } && sizes.sum.between?(1, 200_000_000)
+    true
   end
 end
 
