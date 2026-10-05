@@ -211,6 +211,7 @@ final class UpdateInstaller: @unchecked Sendable {
     func fail(_ error: Error) { busy = false; status = error.localizedDescription; onChange?() }
     func start(_ release: AppRelease) {
         guard !busy else { return }
+        guard !AppIdentity.isDevelopment else { fail(UpdateFailure("로컬 테스트 빌드는 정식 앱으로 업데이트하지 않습니다.")); return }
         let installed = Bundle.main.bundleURL.resolvingSymlinksInPath()
         do {
             _ = try UpdateValidation.installedRequirement(installed)

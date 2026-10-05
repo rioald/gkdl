@@ -31,7 +31,9 @@ func runFeatureTests() {
     featureCheck(!release(nil, url: "https://github.com.evil.test/rioald/gkdl/releases/tag/v3.0").isNewer(than: "1.2.0"))
     featureCheck(!release(nil, url: "https://github.com/codingnoye/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "Upstream releases never replace gkdl")
     featureCheck(!release(nil, url: "https://github.com/rioald/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "The old feature fork is not the gkdl update channel")
-    featureCheck(Bundle.main.bundleIdentifier == "kr.twentyoz.gkdl" && UpdateValidation.identifier == "kr.twentyoz.gkdl")
+    featureCheck(Bundle.main.bundleIdentifier == "kr.twentyoz.gkdl.dev.tests" && AppIdentity.isDevelopment,
+        "Self-tests must use their own app identity and preferences")
+    featureCheck(UpdateValidation.identifier == "kr.twentyoz.gkdl", "Release update validation keeps the production identity")
     let suite = "kr.twentyoz.gkdl.feature-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }

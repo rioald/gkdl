@@ -4,7 +4,7 @@ import ServiceManagement
 extension AppDelegate {
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 384, height: 636), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        window.title = "gkdl"; window.isReleasedWhenClosed = false
+        window.title = AppIdentity.name; window.isReleasedWhenClosed = false
         window.delegate = self; window.hidesOnDeactivate = false; window.center()
         let content = window.contentView!
         func column() -> NSStackView {
@@ -125,16 +125,17 @@ extension AppDelegate {
             replaceInputMenu.topAnchor.constraint(equalTo: replaceRow.topAnchor), replaceInputMenu.bottomAnchor.constraint(equalTo: replaceRow.bottomAnchor)])
         hint("⌘+드래그로 위치를 옮길 수 있어요.", in: general)
         general.setCustomSpacing(12, after: general.arrangedSubviews.last!); full(replaceRow, in: general)
-        iconPicker.addItems(withTitles: ["한 / hi", "한 / A", "KO / EN", "하 / hi"])
-        iconPicker.selectItem(at: iconStyle); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
+        iconPicker.addItems(withTitles: MenuBarIconStyle.allCases.map(\.title))
+        iconPicker.selectItem(at: MenuBarIconStyle.allCases.firstIndex(of: iconStyle)!); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
         iconPicker.setAccessibilityLabel("메뉴바 아이콘 조합")
         for preview in [koreanPreview, englishPreview] {
-            preview.widthAnchor.constraint(equalToConstant: 22).isActive = true
+            preview.widthAnchor.constraint(equalToConstant: 32).isActive = true
             preview.heightAnchor.constraint(equalToConstant: 20).isActive = true; preview.contentTintColor = .labelColor
         }
         koreanPreview.setAccessibilityLabel("한국어 아이콘 미리보기")
         englishPreview.setAccessibilityLabel("영어 아이콘 미리보기")
-        row("메뉴바 아이콘", [iconPicker, koreanPreview, englishPreview], in: general)
+        let previews = NSStackView(views: [koreanPreview, englishPreview]); previews.spacing = 8
+        row("메뉴바 아이콘", [iconPicker, previews], in: general)
         general.setCustomSpacing(32, after: general.arrangedSubviews.last!)
         separator(in: general)
         general.setCustomSpacing(32, after: general.arrangedSubviews.last!)
@@ -192,7 +193,7 @@ extension AppDelegate {
         appIcon.widthAnchor.constraint(equalToConstant: 72).isActive = true
         appIcon.heightAnchor.constraint(equalToConstant: 72).isActive = true
         about.addArrangedSubview(appIcon)
-        let name = NSTextField(labelWithString: "gkdl"); name.font = .systemFont(ofSize: 20, weight: .semibold)
+        let name = NSTextField(labelWithString: AppIdentity.name); name.font = .systemFont(ofSize: 20, weight: .semibold)
         about.setCustomSpacing(12, after: appIcon); about.addArrangedSubview(name)
         updateHeading.font = .systemFont(ofSize: 12); updateHeading.textColor = .secondaryLabelColor; updateHeading.alignment = .center
         about.setCustomSpacing(4, after: name); full(updateHeading, in: about)
@@ -220,7 +221,7 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\n한영 전환과 아차차 바로잡기\n\ngksdud 기반 · © 2026 CodingNoye · MIT")
+        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\n한영 전환과 아차차 바로잡기\n\ngksdud 원작 기반 · © 2026 CodingNoye · MIT")
         credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
         about.addArrangedSubview(credits)
         let license = NSButton(title: "오픈소스 라이선스", target: self, action: #selector(openLicense)); license.bezelStyle = .rounded
@@ -294,8 +295,10 @@ extension AppDelegate {
         updateScroll.isHidden = release == nil
         updateButton.isHidden = release == nil
         updateButton.isEnabled = !installer.busy
-        checkUpdateButton.isEnabled = !updates.checking && !installer.busy
-        if !installer.status.isEmpty { updateStatus.stringValue = installer.status }
+        checkUpdateButton.isHidden = !updates.enabled
+        checkUpdateButton.isEnabled = updates.enabled && !updates.checking && !installer.busy
+        if !updates.enabled { updateStatus.stringValue = "로컬 테스트 빌드 · 새 빌드로 교체해 사용하세요." }
+        else if !installer.status.isEmpty { updateStatus.stringValue = installer.status }
         else if updates.checking { updateStatus.stringValue = "업데이트 확인 중…" }
         else if let error = updates.error { updateStatus.stringValue = error }
         else if let date = updates.lastChecked {

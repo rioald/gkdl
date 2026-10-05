@@ -56,7 +56,7 @@ fi
 mkdir -p "$(dirname "$destination")"
 stage=$(mktemp -d "$(dirname "$destination")/.gkdl-package.XXXXXX")
 trap 'echo "패키징 미완료. 진단 파일: $stage" >&2' ERR
-GKDL_SIGN_MODE=developer-id GKDL_SIGN_IDENTITY="$identity" GKDL_OUTPUT_DIR="$stage/build" bash build.sh
+GKDL_BUILD_VARIANT=release GKDL_SIGN_MODE=developer-id GKDL_SIGN_IDENTITY="$identity" GKDL_OUTPUT_DIR="$stage/build" bash build.sh
 ditto -x -k "$stage/build/gkdl-$version-macos-universal.zip" "$stage"
 app="$stage/gkdl.app"
 requirement="=identifier \"kr.twentyoz.gkdl\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$team\""

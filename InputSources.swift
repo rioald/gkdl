@@ -428,7 +428,7 @@ final class AddedSourcesSettings: NSObject {
         var parts: [String] = [String(trusted), String(on), String(engine.addedSourceMode.rawValue), cycle.joined(separator: ",")]
         let separateKey: String = engine.separateKey.map { String($0) } ?? ""
         parts += [engine.separateSource ?? "", separateKey, enabled.map(\.id).joined(separator: ",")]
-        parts += [String(engine.separateKeyIsHangulKey()), String(engine.keyboards.result.extraBlocked), String(owner.iconStyle), error ?? ""]
+        parts += [String(engine.separateKeyIsHangulKey()), String(engine.keyboards.result.extraBlocked), owner.iconStyle.rawValue, error ?? ""]
         parts += [String(engine.addedSourcesCompatible)]
         let state = parts.joined(separator: "|")
         guard force || state != signature else { return }

@@ -48,7 +48,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          for binary in /private/tmp/gkdl-build.*/test/gkdl.app/Contents/MacOS/gkdl; do
+          for binary in /private/tmp/gkdl-build.*/test/"gkdl dev tests.app"/Contents/MacOS/gkdl-dev-tests; do
             if [[ -f "$binary" ]]; then
               lldb --batch -o run --one-line-on-crash 'thread backtrace all' -- "$binary" --self-test
               break

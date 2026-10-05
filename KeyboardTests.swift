@@ -680,6 +680,14 @@ func renderKeyboardUI(to directory: String) throws {
         }
         delegate.selectTab(0)
         try save(delegate.window.contentView!, "settings-\(name).png")
+        for (index, style) in MenuBarIconStyle.allCases.enumerated() {
+            delegate.iconPicker.selectItem(at: index); delegate.changeIconStyle()
+            try save(delegate.window.contentView!, "icon-\(style.rawValue)-\(name).png")
+            for view: NSView in [delegate.iconPicker, delegate.koreanPreview, delegate.englishPreview] {
+                let frame = view.convert(view.bounds, to: delegate.window.contentView!)
+                precondition(delegate.window.contentView!.bounds.insetBy(dx: 20, dy: 0).contains(frame), "Icon controls fit inside the settings margins")
+            }
+        }
         try save(settings.window.contentView!, "keyboards-\(name).png")
     }
     precondition(delegate.tabButtons[5].contentTintColor == .controlAccentColor && delegate.tabButtons[0].contentTintColor == .controlAccentColor)
@@ -1159,8 +1167,53 @@ func runPermissionTests() {
     let shown = delegate.inputBadge.image
     delegate.updateInputIndicator()
     precondition(shown != nil && delegate.inputBadge.image === shown, "An unchanged source keeps its image")
-    delegate.iconPicker.selectItem(at: (delegate.iconStyle + 1) % 4); delegate.changeIconStyle()
+    delegate.iconPicker.selectItem(at: (delegate.iconPicker.indexOfSelectedItem + 1) % MenuBarIconStyle.allCases.count); delegate.changeIconStyle()
     precondition(delegate.inputBadge.image !== shown, "Another style shows at once")
     print("PASS: without Accessibility, settings disabled and activation off; granted again, settings back and activation still off; replacing the Mac input menu; indicator image kept while unchanged")
+}
+
+func runMenuBarIconTests() {
+    _ = NSApplication.shared
+    let suite = "kr.twentyoz.gkdl.icon-tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    precondition(MenuBarIconStyle.load(from: defaults) == .gkdl, "A fresh install uses 하이 / gkdl")
+    for (legacy, expected): (Int, MenuBarIconStyle) in [(0, .hanHi), (1, .hanA), (2, .languageCodes), (3, .gkdl)] {
+        defaults.set(legacy, forKey: "iconStyle")
+        precondition(MenuBarIconStyle.load(from: defaults) == expected, "Existing numeric choices keep their meaning")
+    }
+    defaults.set(99, forKey: "iconStyle")
+    defaults.set("unknown-style", forKey: "menuBarIconStyle")
+    precondition(MenuBarIconStyle.load(from: defaults) == .gkdl, "Invalid preferences fall back safely")
+    defaults.set(0, forKey: "iconStyle")
+    MenuBarIconStyle.gkdl.save(to: defaults)
+    let engine = Engine(defaults: defaults, discover: { [] })
+    engine.accessibilityTrusted = { true }
+    let delegate = AppDelegate(engine: engine)
+    delegate.buildWindow()
+    delegate.updateMenu()
+    defer { if let item = delegate.item { NSStatusBar.system.removeStatusItem(item) } }
+    precondition(delegate.iconPicker.itemTitles == ["한 / dud", "한 / A", "KO / EN", "ㅎuㅎ / dud", "한 / hi", "하이 / gkdl"])
+    precondition(delegate.iconPicker.titleOfSelectedItem == "하이 / gkdl")
+    for (index, style) in MenuBarIconStyle.allCases.enumerated() {
+        delegate.iconPicker.selectItem(at: index)
+        delegate.changeIconStyle()
+        precondition(MenuBarIconStyle.load(from: UserDefaults(suiteName: suite)!) == style, "Selection persists and takes precedence over the old setting")
+        for korean in [true, false] {
+            let image = delegate.sourceMenuIcon(korean: korean)
+            precondition(image.isTemplate && image.tiffRepresentation != nil, "Both input states render as contrast-aware templates")
+            if style == .gkdl {
+                let text = NSAttributedString(string: style.label(korean: korean), attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold)])
+                precondition(image.size.width >= text.size().width + 4, "Full words have room inside the badge")
+            }
+        }
+        precondition(delegate.item!.length == delegate.inputBadge.image!.size.width + 6, "Status item follows the actual image width")
+    }
+    let release = AppRelease(tag_name: "v99.0.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v99.0.0", body: "", draft: false, prerelease: false)
+    defaults.set(try! JSONEncoder().encode(release), forKey: "updates.release")
+    let disabled = UpdateChecker(defaults: defaults, enabled: false, fetch: { _, _ in preconditionFailure("Development apps must not fetch release updates") })
+    disabled.check(); disabled.check(force: true)
+    precondition(disabled.available == nil && !disabled.checking, "Cached updates cannot replace a development app either")
+    print("PASS: six menu icon choices, fresh default, legacy migration, persistence, rendering width, development update isolation")
 }
 #endif
