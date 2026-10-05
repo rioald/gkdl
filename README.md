@@ -3,7 +3,7 @@
 macOS에서 한영을 전환하고, 잘못 입력한 단어를 단축키로 바로잡는 메뉴 막대 앱입니다.
 `gkdl`을 두벌식 한글로 입력하면 **하이**가 됩니다.
 
-[gksdud](https://github.com/codingnoye/gksdud)를 기반으로 만든 독립 배포 앱입니다. 원본의 한영 전환 기능에 **아차차**를 더하고, 앱 이름·설정·업데이트 경로를 분리했습니다.
+[gksdud](https://github.com/codingnoye/gksdud)를 기반으로 한영 전환과 **아차차**를 제공합니다.
 
 ## 아차차
 
@@ -16,7 +16,9 @@ macOS에서 한영을 전환하고, 잘못 입력한 단어를 단축키로 바�
 
 사전이나 AI 없이 두벌식 자판을 기준으로 변환합니다. 새 단어·이름·숫자가 섞인 단어도 사용할 수 있습니다. 입력을 자동으로 고치지 않으며, 단축키를 눌렀을 때만 바로잡습니다.
 
-일반 입력창, 브라우저, 터미널을 지원합니다. 암호 입력란과 macOS 보안 입력 중에는 동작하지 않습니다. 클립보드를 사용하지 않으며 입력 내용을 저장하거나 전송하지 않습니다. 입력창이 필요한 읽기·편집 기능을 제공하지 않거나 커서 위치가 불확실하면 변경하지 않습니다. 터미널에서는 실행 중 직접 입력한 현재 단어를 기준으로 동작합니다.
+일반 입력창, 브라우저, 터미널에서 사용할 수 있습니다. 일부 입력창에서는 동작하지 않을 수 있으며, 터미널에서는 gkdl 실행 중 직접 입력한 현재 단어를 바로잡습니다.
+
+암호 입력란과 macOS 보안 입력 중에는 동작하지 않습니다. 클립보드를 사용하지 않으며 입력 내용을 저장하거나 전송하지 않습니다.
 
 ## 한영 전환
 
@@ -29,7 +31,7 @@ macOS에서 한영을 전환하고, 잘못 입력한 단어를 단축키로 바�
 
 ## 설치
 
-**macOS 13 Ventura 이상 · Apple Silicon / Intel Universal**
+**macOS 13 Ventura 이상 · Apple Silicon / Intel 지원**
 
 Homebrew로 설치할 수 있습니다.
 
@@ -37,41 +39,40 @@ Homebrew로 설치할 수 있습니다.
 brew install --cask rioald/tap/gkdl
 ```
 
-설치 후 아래 3~5번의 실행·권한 설정을 진행하세요. Homebrew 업데이트와 기존 ZIP 설치본 편입 방법은 [TWENTYOZ Homebrew Tap](https://github.com/rioald/homebrew-tap)을 참고하세요.
+또는 [최신 릴리스](https://github.com/rioald/gkdl/releases/latest)에서 ZIP을 받아 압축을 풀고, `gkdl.app`을 **응용 프로그램** 폴더로 옮기세요.
 
-ZIP으로 직접 설치하려면 다음 순서를 따르세요.
+### 처음 실행할 때
 
-1. [Releases](https://github.com/rioald/gkdl/releases)에서 `gkdl-VERSION-macos-universal.zip`을 받습니다.
-2. 압축을 풀고 `gkdl.app`을 **응용 프로그램** 폴더로 옮깁니다.
-3. 기존 gksdud가 실행 중이면 메뉴에서 정상 종료한 뒤 gkdl을 실행합니다.
-4. **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 gkdl을 허용합니다.
-5. 원하는 한영 전환 키와 아차차를 켭니다.
+1. 기존 gksdud가 실행 중이면 메뉴에서 정상 종료한 뒤 gkdl을 실행합니다.
+2. 메뉴 막대의 **한/hi → 설정**을 엽니다.
+3. **접근성 권한 허용**을 누르고, **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 gkdl을 켭니다.
+4. gkdl 설정으로 돌아와 **활성화**를 켜고 원하는 한영 전환 키를 선택합니다.
+5. **아차차** 탭에서 **단축키로 한영 잘못 입력 바로잡기**를 켭니다.
 
-정식 릴리스는 **TWENTYOZ Developer ID 서명 → Apple 공증 → 티켓 첨부 → Gatekeeper 검증**을 통과한 패키지만 게시합니다. 개발용 빌드와 공증 전 패키지는 정식 릴리스가 아닙니다.
+앱을 실행해도 창이 보이지 않으면 메뉴 막대에서 설정을 여세요. 입력 기능이 동작하지 않으면 접근성 권한과 **활성화**가 모두 켜져 있는지 확인하세요.
 
-gkdl의 앱 ID는 `kr.twentyoz.gkdl`입니다. 기존 gksdud의 설정·접근성 권한을 가져오지 않습니다. 두 앱은 시스템 키보드 설정을 함께 제어하므로 동시에 활성화하지 마세요. 삭제하기 전에는 앱을 정상 종료해 키보드 설정을 복원하세요.
+gksdud를 사용했더라도 gkdl의 권한과 설정은 따로 지정해야 합니다. 두 앱을 동시에 활성화하지 마세요.
 
-업데이트는 `rioald/gkdl`의 릴리스에서 확인합니다. 파일 체크섬, 앱 ID, 버전, 현재 설치본과 같은 서명 주체인지 검증한 뒤 설치합니다. 원본 gksdud로 교체되지 않습니다.
+## 업데이트와 삭제
 
-## 개발과 배포
+설정의 **gkdl** 탭에서 업데이트를 확인하고, 새 버전이 있으면 설치할 수 있습니다.
+
+Homebrew로 설치했다면 다음 명령으로도 업데이트할 수 있습니다.
 
 ```sh
-# 개발용 Universal 빌드 + 자체 테스트 (배포용 인증 없음)
-bash build.sh
-
-# 로컬 키체인의 TWENTYOZ Developer ID로 서명만 수행
-bash scripts/package-release.sh --signed-only
-
-# Apple 공증까지 수행 (소스 커밋 및 키체인 프로필 필요)
-GKDL_NOTARY_PROFILE=gkdl-notary bash scripts/package-release.sh --notarize
-
-# 검증된 패키지를 GitHub에 공개
-bash scripts/publish-release.sh outputs/packages/1.0.0-notarized .github/RELEASE_NOTES.md
+brew update
+brew upgrade --cask --greedy rioald/tap/gkdl
 ```
 
-키체인 프로필 등록, 검증 방법은 [signing/README.md](signing/README.md), 개발 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+기존 ZIP 설치본을 Homebrew로 관리하거나 설치 오류를 해결하려면 [Homebrew 설치 안내](https://github.com/rioald/homebrew-tap#readme)를 참고하세요.
+
+삭제하기 전에는 메뉴에서 gkdl을 정상 종료해 키보드 설정을 복원하세요. ZIP으로 설치했다면 응용 프로그램 폴더에서 앱을 삭제하고, Homebrew로 설치했다면 `brew uninstall --cask gkdl`을 실행하세요.
+
+## 개발 참여
+
+빌드·테스트·배포 방법은 [개발 안내](CONTRIBUTING.md)를 참고하세요.
 
 ## 라이선스와 출처
 
-[MIT License](LICENSE). 원본 gksdud: © 2026 CodingNoye. gkdl 변경사항: © 2026 TWENTYOZ.
+[MIT License](LICENSE). 원본 gksdud: © 2026 CodingNoye. gkdl 변경사항: © 2026 rioald.
 원본의 저작권·라이선스를 소스와 앱에 함께 포함합니다. 자세한 출처는 [NOTICE](NOTICE)에 있습니다.

@@ -220,7 +220,7 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let credits = NSTextField(wrappingLabelWithString: "TWENTYOZ · gkdl (하이)\n한영 전환과 아차차 바로잡기\n\ngksdud 기반 · © 2026 CodingNoye · MIT")
+        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\n한영 전환과 아차차 바로잡기\n\ngksdud 기반 · © 2026 CodingNoye · MIT")
         credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
         about.addArrangedSubview(credits)
         let license = NSButton(title: "오픈소스 라이선스", target: self, action: #selector(openLicense)); license.bezelStyle = .rounded

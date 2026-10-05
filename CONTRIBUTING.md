@@ -26,4 +26,6 @@ bash build.sh
 
 [signing/README.md](signing/README.md)의 로컬 Developer ID/공증 절차를 사용합니다. CI는 빌드·테스트만 수행하며, 비공증 빌드를 공개하지 않습니다. 최초 독립 버전은 1.0.0입니다.
 
+릴리스 설명과 README에는 일반 사용자가 알아야 할 기능, 변경사항, 설치·권한 설정, 사용법을 적습니다. 인증서 이름·팀 ID·공증 절차 등 배포 내부 정보는 개발 문서에서 관리합니다. 릴리스 설명의 `## 요약` 제목은 앱의 업데이트 안내에서 사용하므로 유지합니다.
+
 원본 변경사항은 `upstream`에서 명시적으로 통합합니다. 원본 태그를 gkdl 배포 태그로 사용하지 마세요. gkdl의 `origin`은 `https://github.com/rioald/gkdl.git`입니다.
