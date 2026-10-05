@@ -47,4 +47,8 @@ bash scripts/publish-release.sh outputs/packages/1.0.0-notarized .github/RELEASE
 
 공개 후 첨부 파일을 다시 내려받아 같은 검증을 실행하고, 응용 프로그램 폴더에서 실행과 접근성 권한을 확인합니다. 업데이트 후 권한 유지와 실제 브라우저·터미널 입력은 별도의 실행 검증입니다.
 
+## Homebrew 갱신
+
+새 정식 릴리스 검증 후 [rioald/homebrew-tap](https://github.com/rioald/homebrew-tap)의 `Casks/gkdl.rb`에서 `version`과 공개 ZIP의 `sha256`을 갱신합니다. Homebrew style·audit·livecheck·fetch를 확인하고 커밋·푸시합니다. Cask 갱신은 자동화되어 있지 않습니다.
+
 공식 참고: [Developer ID](https://developer.apple.com/developer-id/), [Apple notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).

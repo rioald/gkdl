@@ -31,6 +31,16 @@ macOS에서 한영을 전환하고, 잘못 입력한 단어를 단축키로 바�
 
 **macOS 13 Ventura 이상 · Apple Silicon / Intel Universal**
 
+Homebrew로 설치할 수 있습니다.
+
+```sh
+brew install --cask rioald/tap/gkdl
+```
+
+설치 후 아래 3~5번의 실행·권한 설정을 진행하세요. Homebrew 업데이트와 기존 ZIP 설치본 편입 방법은 [TWENTYOZ Homebrew Tap](https://github.com/rioald/homebrew-tap)을 참고하세요.
+
+ZIP으로 직접 설치하려면 다음 순서를 따르세요.
+
 1. [Releases](https://github.com/rioald/gkdl/releases)에서 `gkdl-VERSION-macos-universal.zip`을 받습니다.
 2. 압축을 풀고 `gkdl.app`을 **응용 프로그램** 폴더로 옮깁니다.
 3. 기존 gksdud가 실행 중이면 메뉴에서 정상 종료한 뒤 gkdl을 실행합니다.
