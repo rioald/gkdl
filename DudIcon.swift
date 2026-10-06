@@ -37,16 +37,19 @@ enum DudIcon {
 
     static func drawAppIcon(in context: CGContext) {
         context.saveGState()
-        context.setFillColor(NSColor(srgbRed: 0.14, green: 0.32, blue: 0.88, alpha: 1).cgColor)
-        context.addPath(CGPath(roundedRect: CGRect(x: 32, y: 32, width: 448, height: 448),
-            cornerWidth: 100, cornerHeight: 100, transform: nil))
-        context.fillPath()
-        let title = NSAttributedString(string: "하이", attributes: [
-            .font: NSFont.systemFont(ofSize: 174, weight: .bold), .foregroundColor: NSColor.white,
-            .kern: -9
+        context.translateBy(x: 32, y: 116)
+        context.scaleBy(x: 14, y: 14)
+        context.setFillColor(NSColor.white.cgColor)
+        context.setStrokeColor(NSColor.black.cgColor)
+        context.setLineWidth(0.8)
+        context.addPath(CGPath(roundedRect: CGRect(x: 0.75, y: 1.25, width: 30.5, height: 17.5),
+            cornerWidth: 3, cornerHeight: 3, transform: nil))
+        context.drawPath(using: .fillStroke)
+        let title = NSAttributedString(string: "gkdl", attributes: [
+            .font: NSFont.systemFont(ofSize: 11.5, weight: .semibold), .foregroundColor: NSColor.black
         ])
         let size = title.size()
-        title.draw(at: NSPoint(x: (512 - size.width) / 2, y: (512 - size.height) / 2 + 8))
+        title.draw(at: NSPoint(x: (32 - size.width) / 2, y: (20 - size.height) / 2))
         context.restoreGState()
     }
 

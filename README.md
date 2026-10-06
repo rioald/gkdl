@@ -1,6 +1,6 @@
 # gkdl · 하이
 
-**gkdl(하이)**는 [gksdud](https://github.com/codingnoye/gksdud)에 다음을 더한 앱입니다.
+**gkdl(하이)** 는 [gksdud](https://github.com/codingnoye/gksdud) 에 다음을 더한 앱입니다.
 
 - **아차차**: 한영을 잘못 선택해 입력한 단어를 단축키로 바로잡기
 - **하이 / gkdl**: 한글·영문 입력 상태를 표시하는 메뉴바 스타일
@@ -8,9 +8,13 @@
 
 원작의 한영 전환 기능과 설정·선택지를 유지하면서 필요한 기능을 추가합니다. 원작의 기능과 동작 방식은 아래 [gksdud 설명](#원작-gksdud-readme)에서 확인할 수 있습니다.
 
-## gkdl에서 더한 기능
+<img src="docs/screenshots/general.png" width="384" alt="gkdl 일반 탭: 한영 전환 키와 하이 / gkdl 메뉴바 스타일 설정" />
 
-### 아차차
+---
+
+## gkdl 에서 더한 기능
+
+### 1. 아차차
 
 한영 상태를 잘못 선택해 입력했다면 **Shift + Backspace**로 커서 앞 단어를 바로잡으세요.
 
@@ -19,17 +23,19 @@
 - 반대 방향도 변환하며, 다른 입력 없이 같은 단축키를 다시 누르면 원문을 복원합니다.
 - **아차차** 탭에서 기능을 켜거나 끄고, 단축키를 **Option + Space**로 바꿀 수 있습니다.
 
+<img src="docs/screenshots/achacha.png" width="384" alt="gkdl 아차차 탭: 한영 오입력 바로잡기 기능과 단축키 설정" />
+
 사전이나 AI 없이 두벌식 자판을 기준으로 변환합니다. 단축키를 눌렀을 때만 동작하며, 암호 입력란과 macOS 보안 입력은 제외합니다. 클립보드를 사용하지 않고 입력 내용을 저장·전송하지 않습니다.
 
 일반 입력창, 브라우저, 터미널에서 사용할 수 있습니다. 일부 입력창에서는 동작하지 않을 수 있으며, 터미널에서는 gkdl 실행 중 직접 입력한 현재 단어를 바로잡습니다. 선택 영역이 있다면 해제한 뒤 단어 끝에서 사용하세요.
 
-### 하이 / gkdl 메뉴바 스타일
+### 2. 하이 / gkdl 메뉴바 스타일
 
 한글 상태에서는 **하이**, 영문 상태에서는 **gkdl**을 표시합니다. 새 설치의 기본 스타일입니다.
 
 원작의 **한 / dud**, **한 / A**, **KO / EN**, **ㅎuㅎ / dud**도 그대로 선택할 수 있습니다. 기존 선택은 유지하며, 이전 gkdl의 **한 / hi**는 **하이 / gkdl**로 이어집니다.
 
-### Apple Developer ID 서명
+### 3. Apple Developer ID 서명
 
 정식 배포본은 **Apple Developer ID 서명과 Apple 공증**을 거칩니다. 따라서 최초 실행 시 자체 서명 앱처럼 시스템 설정에서 별도로 실행을 허용하는 과정이 필요하지 않습니다.
 
@@ -53,7 +59,7 @@ brew install --cask rioald/tap/gkdl
 
 앱을 실행해도 창이 보이지 않으면 메뉴 막대에서 설정을 여세요. gksdud와 gkdl의 권한·설정은 별도이며, 두 앱을 동시에 활성화하지 마세요.
 
-## gkdl 업데이트와 삭제
+### 업데이트와 삭제
 
 설정의 **gkdl(?)** 탭에서 업데이트를 확인하고 설치할 수 있습니다. Homebrew로 설치했다면 다음 명령으로도 업데이트할 수 있습니다.
 
@@ -66,19 +72,23 @@ brew upgrade --cask --greedy rioald/tap/gkdl
 
 삭제하기 전에는 메뉴에서 gkdl을 정상 종료해 키보드 설정을 복원하세요. ZIP으로 설치했다면 응용 프로그램 폴더에서 앱을 삭제하고, Homebrew로 설치했다면 `brew uninstall --cask gkdl`을 실행하세요.
 
-## 개발
-
-빌드·테스트·배포 방법은 [개발 안내](CONTRIBUTING.md)를 참고하세요.
-
 ## 라이선스
 
 [MIT](LICENSE) · © 2026 rioald
 
 ---
 
+
+
+&nbsp;
+
+&nbsp;
+
 ## 원작 gksdud README
 
 아래는 [gksdud v1.6.0 기준 README 원문](https://github.com/codingnoye/gksdud/blob/54debb68ac31bb11af372d671a730c74b7be2dd4/README.md)입니다. 아래의 설치 명령과 자체 서명 안내는 **원작 gksdud**에 해당하며, **gkdl** 설치는 위 안내를 따라주세요.
+
+---
 
 # gksdud - 씹힘 없고 빠릿빠릿한 Mac 한영 전환
 

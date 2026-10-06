@@ -1169,7 +1169,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.autoenablesItems = false
         let brandEntry = NSMenuItem(title: AppIdentity.name, action: #selector(menuBrand), keyEquivalent: "")
         brandEntry.attributedTitle = NSAttributedString(string: AppIdentity.name, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .heavy), .kern: 0.6])
-        brandEntry.image = badgeImage(label: "hi", filled: false, fontSize: 12)
         brandEntry.target = self
         brandEntry.isEnabled = true
         menu.addItem(brandEntry)
@@ -1198,7 +1197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func menuBrand() { showAbout() }
     func sourceMenuIcon(korean: Bool) -> NSImage {
         iconStyle == 3 ? DudIcon.badge(korean: korean) : badgeImage(label: iconLabel(korean: korean), filled: korean,
-            width: iconStyle == 4 ? 32 : 22, fontSize: iconStyle == 4 ? 11.5 : nil)
+            width: iconStyle == 4 ? 28 : 22, height: iconStyle == 4 ? 18 : 20, fontSize: iconStyle == 4 ? 10.5 : nil)
     }
     @objc func changeIconStyle() {
         guard iconStyleNames.indices.contains(iconPicker.indexOfSelectedItem) else { return }
@@ -1214,8 +1213,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         koreanPreview.image = sourceMenuIcon(korean: true)
         englishPreview.image = sourceMenuIcon(korean: false)
     }
-    func badgeImage(label: String, filled: Bool, width: CGFloat = 22, fontSize: CGFloat? = nil) -> NSImage {
-        let image = NSImage(size: NSSize(width: width, height: 20), flipped: false) { rect in
+    func badgeImage(label: String, filled: Bool, width: CGFloat = 22, height: CGFloat = 20, fontSize: CGFloat? = nil) -> NSImage {
+        let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
             let shape = NSBezierPath(roundedRect: rect.insetBy(dx: 0.75, dy: 1.25), xRadius: 3, yRadius: 3)
             NSColor.black.set()
             if filled { shape.fill() } else { shape.lineWidth = 0.8; shape.stroke() }

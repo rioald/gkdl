@@ -183,7 +183,9 @@ extension AppDelegate {
         correctionStatus.font = .systemFont(ofSize: 11); correctionStatus.textColor = .secondaryLabelColor
         full(correctionStatus, in: correction)
         let about = tabPanels[5]; about.alignment = .centerX; about.spacing = 18
-        let appIcon = NSImageView(image: NSApp.applicationIconImage)
+        // Load the artwork directly, without the system's rounded app-icon background.
+        let artwork = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
+        let appIcon = NSImageView(image: artwork ?? NSApp.applicationIconImage)
         appIcon.widthAnchor.constraint(equalToConstant: 72).isActive = true
         appIcon.heightAnchor.constraint(equalToConstant: 72).isActive = true
         about.addArrangedSubview(appIcon)

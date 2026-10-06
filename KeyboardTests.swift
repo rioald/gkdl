@@ -1206,7 +1206,7 @@ func runMenuBarIconTests() {
             let image = delegate.sourceMenuIcon(korean: korean)
             precondition(image.isTemplate && image.tiffRepresentation != nil, "Both input states render as contrast-aware templates")
             if index == 4 {
-                let text = NSAttributedString(string: delegate.iconLabel(korean: korean), attributes: [.font: NSFont.systemFont(ofSize: 11.5, weight: .semibold)])
+                let text = NSAttributedString(string: delegate.iconLabel(korean: korean), attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .semibold)])
                 precondition(image.size.width >= text.size().width + 4, "Full words have room inside the badge")
             }
         }
