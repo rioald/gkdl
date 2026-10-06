@@ -3,6 +3,11 @@ import ServiceManagement
 import IOKit
 import Carbon
 
+enum AppIdentity {
+    static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "gkdl"
+    static let isDevelopment = Bundle.main.bundleIdentifier?.hasPrefix("com.zzune.gkdl.dev") == true
+}
+
 let srcKey = "HIDKeyboardModifierMappingSrc"
 let dstKey = "HIDKeyboardModifierMappingDst"
 let f19: UInt64 = 0x70000006e
@@ -81,7 +86,7 @@ struct ShortcutPreferences {
         let domain = "com.apple.symbolichotkeys" as CFString
         CFPreferencesSetAppValue("AppleSymbolicHotKeys" as CFString, keys as CFDictionary, domain)
         guard CFPreferencesAppSynchronize(domain) else {
-            throw NSError(domain: "gkdl", code: 1, userInfo: [NSLocalizedDescriptionKey: "입력 소스 단축키를 저장하지 못했습니다."])
+            throw NSError(domain: "gksdud", code: 1, userInfo: [NSLocalizedDescriptionKey: "입력 소스 단축키를 저장하지 못했습니다."])
         }
     }, activate: {
         let process = Process()
@@ -91,7 +96,7 @@ struct ShortcutPreferences {
         process.arguments = ["-u", "-virtualSession"]
         try process.run(); process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw NSError(domain: "gkdl", code: 2, userInfo: [NSLocalizedDescriptionKey: "단축키 활성화에 실패했습니다. 다시 시도해주세요."])
+            throw NSError(domain: "gksdud", code: 2, userInfo: [NSLocalizedDescriptionKey: "단축키 활성화에 실패했습니다. 다시 시도해주세요."])
         }
     })
 }
@@ -109,7 +114,7 @@ struct InputMenuPreference {
         let domain = "com.apple.TextInputMenu" as CFString
         CFPreferencesSetAppValue("visible" as CFString, value, domain)
         guard CFPreferencesAppSynchronize(domain) else {
-            throw NSError(domain: "gkdl", code: 10, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴 표시 설정을 저장하지 못했습니다."])
+            throw NSError(domain: "gksdud", code: 10, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴 표시 설정을 저장하지 못했습니다."])
         }
         // This system agent is KeepAlive-managed by launchd; restart only it to reload preferences.
         let process = Process()
@@ -118,7 +123,7 @@ struct InputMenuPreference {
         process.standardError = FileHandle.nullDevice
         try process.run(); process.waitUntilExit()
         guard process.terminationStatus == 0 || process.terminationStatus == 1 else {
-            throw NSError(domain: "gkdl", code: 11, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴를 새로 고치지 못했습니다."])
+            throw NSError(domain: "gksdud", code: 11, userInfo: [NSLocalizedDescriptionKey: "기본 입력기 메뉴를 새로 고치지 못했습니다."])
         }
     })
 }
@@ -475,20 +480,20 @@ let capsSafeKorean = "com.apple.inputmethod.Korean.2SetKorean"
 func setCapsLock(_ enabled: Bool) throws {
     let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOHIDSystem"))
     guard service != IO_OBJECT_NULL else {
-        throw NSError(domain: "gkdl", code: 20, userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 장치를 찾지 못했습니다."])
+        throw NSError(domain: "gksdud", code: 20, userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 장치를 찾지 못했습니다."])
     }
     defer { IOObjectRelease(service) }
     var connection: io_connect_t = 0
     let opened = IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connection)
     guard opened == KERN_SUCCESS else {
-        throw NSError(domain: "gkdl", code: Int(opened), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 연결에 실패했습니다."])
+        throw NSError(domain: "gksdud", code: Int(opened), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 제어 연결에 실패했습니다."])
     }
     defer { IOServiceClose(connection) }
     // No readback: right after a change that took effect it can still report the old state. The restore checks after a
     // switch catch a change that did not.
     let result = IOHIDSetModifierLockState(connection, Int32(kIOHIDCapsLockState), enabled)
     guard result == KERN_SUCCESS else {
-        throw NSError(domain: "gkdl", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 상태를 변경하지 못했습니다."])
+        throw NSError(domain: "gksdud", code: Int(result), userInfo: [NSLocalizedDescriptionKey: "Caps Lock 상태를 변경하지 못했습니다."])
     }
 }
 
@@ -587,8 +592,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let iconPicker = NSPopUpButton()
     let koreanPreview = NSImageView()
     let englishPreview = NSImageView()
-    var iconStyle: MenuBarIconStyle { MenuBarIconStyle.load(from: engine.defaults) }
-    func iconLabel(korean: Bool) -> String { iconStyle.label(korean: korean) }
+    let iconStyleNames = ["hanDud", "hanA", "languageCodes", "character", "gkdl"]
+    var iconStyle: Int {
+        if let saved = engine.defaults.string(forKey: "menuBarIconStyle") {
+            if let index = iconStyleNames.firstIndex(of: saved) { return index }
+            if saved == "hanHi" { return 4 }
+        }
+        // gkdl 1.0.0 used 0 for 한 / hi and 3 for its own badge; both become 하이 / gkdl.
+        let legacy = engine.defaults.integer(forKey: "iconStyle")
+        return (1...2).contains(legacy) ? legacy : 4
+    }
+    func iconLabel(korean: Bool) -> String { korean ? (iconStyle == 4 ? "하이" : iconStyle == 2 ? "KO" : "한") : ["dud", "A", "EN", "캐릭터", "gkdl"][iconStyle] }
     let enabled = NSButton(checkboxWithTitle: "활성화", target: nil, action: nil)
     let login = NSButton(checkboxWithTitle: "로그인 시 시작", target: nil, action: nil)
     let showInMenuBar = NSButton(checkboxWithTitle: "메뉴바에 표시", target: nil, action: nil)
@@ -1136,7 +1150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func updateMenu() {
         if showInMenuBar.state == .off { if let item { NSStatusBar.system.removeStatusItem(item) }; item = nil; return }
         guard item == nil else { return }
-        item = NSStatusBar.system.statusItem(withLength: iconStyle.width + 6)
+        item = NSStatusBar.system.statusItem(withLength: 28)
         item?.button?.font = .systemFont(ofSize: 13, weight: .medium)
         if let button = item?.button {
             warningBadge.removeFromSuperview()
@@ -1155,7 +1169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menu.autoenablesItems = false
         let brandEntry = NSMenuItem(title: AppIdentity.name, action: #selector(menuBrand), keyEquivalent: "")
         brandEntry.attributedTitle = NSAttributedString(string: AppIdentity.name, attributes: [.font: NSFont.systemFont(ofSize: 15, weight: .heavy), .kern: 0.6])
-        brandEntry.image = GkdlIcon.badge(korean: false)
+        brandEntry.image = badgeImage(label: "hi", filled: false, fontSize: 12)
         brandEntry.target = self
         brandEntry.isEnabled = true
         menu.addItem(brandEntry)
@@ -1183,13 +1197,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     @objc func menuBrand() { showAbout() }
     func sourceMenuIcon(korean: Bool) -> NSImage {
-        iconStyle == .character ? DudIcon.badge(korean: korean)
-            : badgeImage(label: iconLabel(korean: korean), filled: korean, width: iconStyle.width,
-                         fontSize: iconStyle == .gkdl ? 11.5 : nil)
+        iconStyle == 3 ? DudIcon.badge(korean: korean) : badgeImage(label: iconLabel(korean: korean), filled: korean,
+            width: iconStyle == 4 ? 32 : 22, fontSize: iconStyle == 4 ? 11.5 : nil)
     }
     @objc func changeIconStyle() {
-        guard MenuBarIconStyle.allCases.indices.contains(iconPicker.indexOfSelectedItem) else { return }
-        MenuBarIconStyle.allCases[iconPicker.indexOfSelectedItem].save(to: engine.defaults)
+        guard iconStyleNames.indices.contains(iconPicker.indexOfSelectedItem) else { return }
+        engine.defaults.set(iconStyleNames[iconPicker.indexOfSelectedItem], forKey: "menuBarIconStyle")
         refreshIconPreviews()
         updateInputIndicator()
         for entry in item?.menu?.items ?? [] {

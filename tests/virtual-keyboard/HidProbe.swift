@@ -2,7 +2,7 @@ import AppKit
 import Carbon
 import IOKit
 
-// Presses keys on a Karabiner virtual keyboard through vhid-keys, so macOS, the input method and the running gkdl
+// Presses keys on a Karabiner virtual keyboard through vhid-keys, so macOS, the input method and the running gksdud
 // see them like a physical keyboard. Checks the input source, the Caps Lock lock and the typed text in its own window.
 // Arguments: <vhid-keys socket> [--reset]. --reset only leaves English lowercase remembered and exits.
 
@@ -54,7 +54,7 @@ func available(_ prefix: String) -> TISInputSource? {
 guard let english = available("en"), let korean = available("ko") else { fail("English and Korean input sources are required") }
 
 // The running app's settings, read only. The first single key chosen as a Korean/English key switches.
-let settings = UserDefaults(suiteName: "kr.twentyoz.gkdl")!
+let settings = UserDefaults(suiteName: "com.zzune.gkdl")!
 let singleKeys: [(UInt64, String)] = [(0x7000000e7, "rcmd"), (0x7000000e6, "ropt"), (0x700000039, "caps"), (0x7000000e4, "rctrl")]
 let chosen = (settings.string(forKey: "source") ?? "\(singleKeys[0].0)").split(separator: ",").compactMap { UInt64($0) }
 guard let switchKey = singleKeys.first(where: { chosen.contains($0.0) && $0.1 != "caps" })?.1 else {
@@ -96,7 +96,7 @@ func press(_ key: String, hold: TimeInterval = 0.03) {
     _ = send("up \(key)")
     pump(0.03)
 }
-// gkdl ignores software lock changes, so the English case it remembers is set back with a real Caps Lock press.
+// gksdud ignores software lock changes, so the English case it remembers is set back with a real Caps Lock press.
 func restore(englishCaps: Bool = savedLock) {
     _ = send("release")
     window.makeFirstResponder(sink)
@@ -129,7 +129,7 @@ func start(_ source: TISInputSource, caps: Bool) {
 guard focused() else { restore(); fail("the test window did not become active") }
 if CommandLine.arguments.contains("--reset") { restore(englishCaps: false); log("reset: \(state())"); exit(0) }
 log("gkdl: switch key \(switchKey), preserve \(preserve), Caps Lock in Korean \(koreanCaps), ESC \(settings.bool(forKey: "escapeToEnglish"))")
-// gkdl maps the switch key on a new keyboard within a second.
+// gksdud maps the switch key on a new keyboard within a second.
 start(english, caps: false)
 var mapped = false
 for _ in 0..<5 where !mapped { switchSource(); mapped = currentLanguage().hasPrefix("ko"); if !mapped { pump(0.6) } }

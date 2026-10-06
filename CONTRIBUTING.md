@@ -2,13 +2,7 @@
 
 Swift/AppKit 기반 macOS 메뉴 막대 앱입니다. 최소 macOS 13, 배포 형식은 arm64 + x86_64 Universal입니다.
 
-## 원칙
-
-- 단축키로 요청한 경우에만 한영 오입력을 변환합니다. 자동 교정·사전·AI·네트워크 변환을 추가하지 않습니다.
-- 암호/보안 입력은 제외하며 입력 기록을 저장·전송하지 않습니다.
-- 일반 타이핑 중 전체 문서를 읽지 않습니다. 커서·선택·문맥이 불확실하면 입력을 보존합니다.
-- 키보드 매핑을 바꾸는 기능은 정상 종료와 실패 시 기존 시스템 설정을 복원해야 합니다.
-- 원본 프로젝트의 MIT 저작권과 라이선스는 유지합니다.
+프로젝트 작업 지침과 원작 유지·gkdl 확장 원칙은 [AGENTS.md](AGENTS.md)를 따릅니다.
 
 ## 검증
 
@@ -18,7 +12,7 @@ ruby scripts/test_release.rb
 bash build.sh
 ```
 
-`bash build.sh`는 `outputs/dev/gkdl dev.app`과 개발용 ZIP을 만듭니다. 개발 앱은 `kr.twentyoz.gkdl.dev` 식별자를 사용하므로 정식 앱과 설정·접근성 권한·로그인 항목이 분리됩니다. 창 제목과 메뉴에도 `gkdl dev`를 표시합니다. 처음에는 비활성 상태이며, 입력 기능을 시험할 때는 정식 앱을 정상 종료한 뒤 개발 앱의 접근성 권한과 활성화를 켜세요.
+`bash build.sh`는 `outputs/dev/gkdl dev.app`과 개발용 ZIP을 만듭니다. 개발 앱은 `com.zzune.gkdl.dev` 식별자를 사용하므로 정식 앱과 설정·접근성 권한·로그인 항목이 분리됩니다. 창 제목과 메뉴에도 `gkdl dev`를 표시합니다. 처음에는 비활성 상태이며, 입력 기능을 시험할 때는 정식 앱을 정상 종료한 뒤 개발 앱의 접근성 권한과 활성화를 켜세요.
 
 ```sh
 open "outputs/dev/gkdl dev.app" --args --settings

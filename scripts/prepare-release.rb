@@ -19,16 +19,15 @@ metadata = ReleaseMetadata.new(version)
 archive = File.expand_path(ARGV[0])
 abort 'Missing release archive' unless File.file?(archive)
 abort "Release asset must be named #{metadata.filename}" unless File.basename(archive) == metadata.filename
-requirement = '=identifier "kr.twentyoz.gkdl" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "KTC97BHY7R"'
+requirement = '=identifier "com.zzune.gkdl" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "KTC97BHY7R"'
 
 Dir.mktmpdir('gkdl-release-') do |stage|
   ReleaseArchive.validate_listing!(capture!('/usr/bin/unzip', '-Z1', archive), capture!('/usr/bin/unzip', '-Z', '-l', archive))
   capture!('/usr/bin/ditto', '-x', '-k', archive, stage)
   app = "#{stage}/gkdl.app"
-  %w[LICENSE NOTICE].each do |name|
-    bundled = "#{app}/Contents/Resources/#{name}"
-    abort "Archive must include the current #{name}" unless File.file?(bundled) && File.binread(bundled) == File.binread("#{root}/#{name}")
-  end
+  license = "#{app}/Contents/Resources/LICENSE"
+  abort 'Archive must include the current LICENSE' unless File.file?(license) &&
+    File.binread(license) == File.binread("#{root}/LICENSE")
   capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', requirement, app)
   %w[CFBundleShortVersionString CFBundleVersion CFBundleIdentifier CFBundleExecutable].each do |key|
     expected = capture!('/usr/libexec/PlistBuddy', '-c', "Print :#{key}", "#{root}/Info.plist")
@@ -46,4 +45,4 @@ end
 checksum = "#{Digest::SHA256.file(archive).hexdigest}  #{metadata.filename}\n"
 sums = File.join(File.dirname(archive), 'SHA256SUMS')
 abort 'SHA256SUMS does not match the verified archive' unless File.file?(sums) && File.read(sums) == checksum
-puts "Verified: #{metadata.filename} (TWENTYOZ Developer ID, Universal, notarization ticket, Gatekeeper, SHA256)"
+puts "Verified: #{metadata.filename} (Developer ID, Universal, notarization ticket, Gatekeeper, SHA256)"

@@ -137,6 +137,7 @@
 ## 메뉴바 아이콘
 
 - **목적**: 기본 입력기 아이콘을 대신해 현재 입력 소스 표시
+- **스타일**: 원작의 네 가지 선택지를 유지하고 `하이 / gkdl`을 추가. gkdl에서 저장한 기존 선택은 유지하며 이전 `한 / hi`는 `하이 / gkdl`로 연결
 - **방법**: 입력 소스 변경 알림으로 갱신. 메뉴가 열려 있는 동안은 알림이 늦게 와서 `eventTracking` 모드 타이머로 0.1초마다 갱신
 
 ## 서명과 업데이트
@@ -152,7 +153,7 @@
 - 아래 `--` 모드는 `TESTS` 플래그로 테스트용 앱에만 컴파일되고 배포 앱에는 없음. `build.sh`가 배포 앱과 함께 테스트용 앱을 만듦
 - `--self-test`: 빌드 중 테스트용 앱에서 실행. 가짜 키보드, 가짜 단축키 저장소, 임시 UserDefaults를 써서 실제 HID와 시스템 설정을 건드리지 않음
 - `--render-keyboard-ui <폴더>`: 설정 창을 밝은/어두운 모드 PNG로 저장
-- `--probe-option-input`, `--probe-escape`, `--probe-input-sources`: 설치본과 같은 인증서로 서명된 테스트용 앱을 `open -n`으로 실행해, 같은 접근성 권한으로 실행 중인 gkdl의 실제 입력 경로 확인
+- `--probe-option-input`, `--probe-escape`, `--probe-input-sources`: 별도 접근성 권한을 허용한 `gkdl dev tests.app`을 `open -n`으로 실행해 실제 입력 경로 확인. `--probe-escape`는 정식 gkdl 앱의 설정을 읽음
 - `tests/virtual-keyboard`: 합성한 Caps Lock 이벤트는 잠금을 바꾸지 않아, Karabiner 가상 키보드로 실제 HID 입력을 만들어 확인
 
 ## 관계 요약

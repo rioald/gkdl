@@ -76,7 +76,7 @@ enum UpdateProcessLauncher {
 // The installer has no signing secrets and never modifies signature requirements.
 // A new bundle must satisfy the currently installed app's certificate-bound identity.
 enum UpdateValidation {
-    static let identifier = "kr.twentyoz.gkdl"
+    static let identifier = "com.zzune.gkdl"
     static let strict = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
     static func signedCode(_ path: URL) throws -> SecStaticCode {
         var code: SecStaticCode?

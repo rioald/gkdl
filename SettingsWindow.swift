@@ -45,13 +45,7 @@ extension AppDelegate {
             button.tag = index; button.setButtonType(.toggle); button.bezelStyle = .regularSquare
             button.isBordered = false; button.imagePosition = .imageAbove; button.imageScaling = .scaleProportionallyDown
             button.font = .systemFont(ofSize: 10)
-            if index == 0 {
-                button.image = sourceMenuIcon(korean: true)
-            } else if index == 4 {
-                button.image = tabGlyph("aㅁ", fontSize: 14)
-            } else {
-                button.image = tabGlyph(["", "Aa", "⌥", "+", "", "?"][index])
-            }
+            button.image = index == 0 ? sourceMenuIcon(korean: true) : tabGlyph(["", "Aa", "⌥", "+", "aㅁ", "?"][index], fontSize: index == 4 ? 14 : 16)
             button.setAccessibilityLabel(title + " 탭")
             tabs.addArrangedSubview(button); tabButtons.append(button)
         }
@@ -125,8 +119,8 @@ extension AppDelegate {
             replaceInputMenu.topAnchor.constraint(equalTo: replaceRow.topAnchor), replaceInputMenu.bottomAnchor.constraint(equalTo: replaceRow.bottomAnchor)])
         hint("⌘+드래그로 위치를 옮길 수 있어요.", in: general)
         general.setCustomSpacing(12, after: general.arrangedSubviews.last!); full(replaceRow, in: general)
-        iconPicker.addItems(withTitles: MenuBarIconStyle.allCases.map(\.title))
-        iconPicker.selectItem(at: MenuBarIconStyle.allCases.firstIndex(of: iconStyle)!); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
+        iconPicker.addItems(withTitles: ["한 / dud", "한 / A", "KO / EN", "ㅎuㅎ / dud", "하이 / gkdl"])
+        iconPicker.selectItem(at: iconStyle); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
         iconPicker.setAccessibilityLabel("메뉴바 아이콘 조합")
         for preview in [koreanPreview, englishPreview] {
             preview.widthAnchor.constraint(equalToConstant: 32).isActive = true
@@ -221,11 +215,15 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\n한영 전환과 아차차 바로잡기\n\ngksdud 원작 기반 · © 2026 CodingNoye · MIT")
+        let description = NSTextField(wrappingLabelWithString: "gkdl은 두벌식으로 ‘하이’를 입력한 이름입니다.\ngksdud의 기능과 설정을 유지하면서\n아차차와 하이 / gkdl 스타일을 더했습니다.")
+        description.font = .systemFont(ofSize: 11); description.textColor = .secondaryLabelColor; description.alignment = .center
+        full(description, in: about)
+        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\ngksdud 원작 기반 · © 2026 CodingNoye · MIT")
         credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
         about.addArrangedSubview(credits)
         let license = NSButton(title: "오픈소스 라이선스", target: self, action: #selector(openLicense)); license.bezelStyle = .rounded
         about.addArrangedSubview(NSStackView(views: [link("원본 프로젝트", icon: "github", action: #selector(openUpstream)), license]))
+        about.addArrangedSubview(link("원작 개발자 후원 · Fairy", icon: "fairy", template: false, action: #selector(openSupport)))
         selectTab(0); updatePressAccess(); refreshSpecialMode(); refreshUpdates(); refreshIconPreviews(); refreshKeyboardState(); updateInputIndicator()
     }
     func tabGlyph(_ text: String, fontSize: CGFloat = 16) -> NSImage {
@@ -278,6 +276,7 @@ extension AppDelegate {
             repair()
         }
     }
+    @objc func openSupport() { NSWorkspace.shared.open(URL(string: "https://fairy.hada.io/@gksdud")!) }
     @objc func openUpstream() { NSWorkspace.shared.open(URL(string: "https://github.com/codingnoye/gksdud")!) }
     @objc func openLicense() {
         if let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil) { NSWorkspace.shared.open(url) }

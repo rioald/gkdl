@@ -1,6 +1,6 @@
 import AppKit
 
-// Original gksdud character badge. Copyright 2026 CodingNoye (MIT).
+// gkdl app artwork and original gksdud character templates in the menu bar.
 enum DudIcon {
     static func drawFace(in context: CGContext, korean: Bool = false) {
         context.setLineCap(.round)
@@ -35,6 +35,21 @@ enum DudIcon {
         context.strokePath()
     }
 
+    static func drawAppIcon(in context: CGContext) {
+        context.saveGState()
+        context.setFillColor(NSColor(srgbRed: 0.14, green: 0.32, blue: 0.88, alpha: 1).cgColor)
+        context.addPath(CGPath(roundedRect: CGRect(x: 32, y: 32, width: 448, height: 448),
+            cornerWidth: 100, cornerHeight: 100, transform: nil))
+        context.fillPath()
+        let title = NSAttributedString(string: "하이", attributes: [
+            .font: NSFont.systemFont(ofSize: 174, weight: .bold), .foregroundColor: NSColor.white,
+            .kern: -9
+        ])
+        let size = title.size()
+        title.draw(at: NSPoint(x: (512 - size.width) / 2, y: (512 - size.height) / 2 + 8))
+        context.restoreGState()
+    }
+
     static func badge(korean: Bool) -> NSImage {
         let filled = korean
         let image = NSImage(size: NSSize(width: 22, height: 20), flipped: false) { rect in
@@ -61,3 +76,31 @@ enum DudIcon {
         return image
     }
 }
+
+// The build compiles this entry point only for the iconset generator.
+#if ICON_GENERATOR
+@main
+struct IconGenerator {
+    static func main() throws {
+        let destination = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        for points in [16, 32, 128, 256, 512] {
+            for scale in [1, 2] {
+                let pixels = points * scale
+                let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels,
+                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                    colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+                let context = NSGraphicsContext.current!.cgContext
+                context.scaleBy(x: CGFloat(pixels) / 512, y: CGFloat(pixels) / 512)
+                DudIcon.drawAppIcon(in: context)
+                NSGraphicsContext.restoreGraphicsState()
+                let suffix = scale == 2 ? "@2x" : ""
+                try bitmap.representation(using: .png, properties: [:])!.write(to:
+                    destination.appendingPathComponent("icon_\(points)x\(points)\(suffix).png"))
+            }
+        }
+    }
+}
+#endif

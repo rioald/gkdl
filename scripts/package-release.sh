@@ -1,5 +1,5 @@
 #!/bin/bash
-# 로컬 키체인의 TWENTYOZ Developer ID로 빌드한다. 설치하거나 공개하지 않는다.
+# 로컬 키체인의 Developer ID로 빌드한다. 설치하거나 공개하지 않는다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,7 +13,7 @@ usage() {
 --notarize:    서명, Apple 공증, 티켓 첨부, Gatekeeper 검증을 수행한다.
 
 선택 환경변수:
-  GKDL_SIGN_IDENTITY  여러 TWENTYOZ 인증서 중 사용할 SHA-1 지문
+  GKDL_SIGN_IDENTITY  같은 팀의 여러 Developer ID 인증서 중 사용할 SHA-1 지문
   GKDL_PACKAGE_DIR   새 결과 폴더 경로 (기존 폴더는 덮어쓰지 않음)
   GKDL_APP_VERSION / GKDL_BUILD_NUMBER  build.sh의 버전 재정의
 EOF
@@ -33,11 +33,11 @@ if [[ -n "$identity" ]]; then
   identity=$(printf '%s' "$identity" | tr '[:lower:]' '[:upper:]')
   [[ "$identity" =~ ^[A-F0-9]{40}$ ]] || { echo '인증서는 40자리 SHA-1 지문으로 지정해주세요.' >&2; exit 1; }
   [[ $'\n'"$identities"$'\n' == *$'\n'"$identity"$'\n'* ]] || {
-    echo '지정한 인증서가 유효한 TWENTYOZ Developer ID 서명 ID가 아닙니다.' >&2; exit 1;
+    echo '지정한 인증서가 배포 팀의 유효한 Developer ID 서명 ID가 아닙니다.' >&2; exit 1;
   }
 else
   [[ "$identities" =~ ^[A-F0-9]{40}$ ]] || {
-    echo 'TWENTYOZ Developer ID가 없거나 여러 개입니다. GKDL_SIGN_IDENTITY를 확인해주세요.' >&2; exit 1;
+    echo '배포 팀의 Developer ID가 없거나 여러 개입니다. GKDL_SIGN_IDENTITY를 확인해주세요.' >&2; exit 1;
   }
   identity=$identities
 fi
@@ -59,7 +59,7 @@ trap 'echo "패키징 미완료. 진단 파일: $stage" >&2' ERR
 GKDL_BUILD_VARIANT=release GKDL_SIGN_MODE=developer-id GKDL_SIGN_IDENTITY="$identity" GKDL_OUTPUT_DIR="$stage/build" bash build.sh
 ditto -x -k "$stage/build/gkdl-$version-macos-universal.zip" "$stage"
 app="$stage/gkdl.app"
-requirement="=identifier \"kr.twentyoz.gkdl\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$team\""
+requirement="=identifier \"com.zzune.gkdl\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$team\""
 codesign --verify --deep --strict --all-architectures -R "$requirement" "$app"
 for arch in arm64 x86_64; do
   lipo "$app/Contents/MacOS/gkdl" -verify_arch "$arch"
@@ -93,7 +93,7 @@ ditto -c -k --keepParent --norsrc "$app" "$stage/$archive"
 (cd "$stage" && shasum -a 256 "$archive" > SHA256SUMS)
 codesign -d --verbose=4 -r- "$app" > "$stage/signature.txt" 2>&1
 cat > "$stage/PACKAGE.txt" <<EOF
-gkdl $version / TWENTYOZ ($team)
+gkdl $version / Developer ID ($team)
 상태: $status
 아키텍처: arm64 + x86_64
 소스: $(git rev-parse HEAD)

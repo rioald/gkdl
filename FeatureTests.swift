@@ -31,10 +31,10 @@ func runFeatureTests() {
     featureCheck(!release(nil, url: "https://github.com.evil.test/rioald/gkdl/releases/tag/v3.0").isNewer(than: "1.2.0"))
     featureCheck(!release(nil, url: "https://github.com/codingnoye/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "Upstream releases never replace gkdl")
     featureCheck(!release(nil, url: "https://github.com/rioald/gksdud/releases/tag/v1.3.0").isNewer(than: "1.2.0"), "The old feature fork is not the gkdl update channel")
-    featureCheck(Bundle.main.bundleIdentifier == "kr.twentyoz.gkdl.dev.tests" && AppIdentity.isDevelopment,
+    featureCheck(Bundle.main.bundleIdentifier == "com.zzune.gkdl.dev.tests" && AppIdentity.isDevelopment,
         "Self-tests must use their own app identity and preferences")
-    featureCheck(UpdateValidation.identifier == "kr.twentyoz.gkdl", "Release update validation keeps the production identity")
-    let suite = "kr.twentyoz.gkdl.feature-tests.\(UUID().uuidString)"
+    featureCheck(UpdateValidation.identifier == "com.zzune.gkdl", "Release update validation keeps the production identity")
+    let suite = "io.gksdud.feature-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     var now = Date(timeIntervalSince1970: 100_000), requests = 0
@@ -127,7 +127,7 @@ func runEnglishSwitchTests() {
     into.capsKeyChanged(english: true, actual: false)
     featureCheck(into.target(english: true) == true, "A switch it did not see start is not taken for one into English")
 
-    let suite = "kr.twentyoz.gkdl.english-switch-tests.\(UUID().uuidString)"
+    let suite = "io.gksdud.english-switch-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("english-switch-1", name: "Keyboard", serial: "english-switch")
@@ -311,9 +311,9 @@ func runOptionInputTests() {
     front = 99; controller.cancel(focusChanged: true); drain()
     featureCheck(events.isEmpty && !controller.busy, "Never replay queued text into a different app")
     featureCheck(!warnings.isEmpty)
-    featureCheck(AppDelegate.sourceForID("kr.twentyoz.gkdl.nonexistent-input-source") == nil, "Unavailable input sources must not crash")
+    featureCheck(AppDelegate.sourceForID("io.gksdud.nonexistent-input-source") == nil, "Unavailable input sources must not crash")
     if let abc = AppDelegate.sourceForID("com.apple.keylayout.ABC"), let identity = AppDelegate.sourceIdentity(abc) {
-        let owner = AppDelegate(engine: Engine(defaults: UserDefaults(suiteName: "kr.twentyoz.gkdl.layout-read-test")!, discover: { [] }))
+        let owner = AppDelegate(engine: Engine(defaults: UserDefaults(suiteName: "io.gksdud.layout-read-test")!, discover: { [] }))
         let translate = owner.makeOptionInput().environment.deadState
         for (accent, base): (Int64, Int64) in [(14, 0), (32, 32), (34, 0), (45, 45), (14, 83)] {
             let pending = translate(identity, event(accent, option), 0) ?? 0
@@ -339,7 +339,7 @@ func probeOptionInput() throws {
     guard AXIsProcessTrusted() else { throw NSError(domain: "probe", code: 1, userInfo: [NSLocalizedDescriptionKey: "Native input probe requires accessibility permission."]) }
     let previousApp = NSWorkspace.shared.frontmostApplication
     let savedSource = TISCopyCurrentKeyboardInputSource()!.takeRetainedValue()
-    let suite = "kr.twentyoz.gkdl.input-probe.\(UUID().uuidString)"
+    let suite = "io.gksdud.input-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 160), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -477,8 +477,8 @@ func probeOptionInput() throws {
     guard passed == total else { throw NSError(domain: "probe", code: 3, userInfo: [NSLocalizedDescriptionKey: "Native input expectations failed."]) }
 }
 
-// Drives the running gkdl with HID-level keys from a second instance, then reads the input source and the Caps Lock lock.
-// Launch the test app from build.sh, signed like the installed one, so it has gkdl's Accessibility permission:
+// Drives the running gksdud with HID-level keys from a second instance, then reads the input source and the Caps Lock lock.
+// Grant the separate test app from build.sh its own Accessibility permission:
 // open -n -W --stdout <file> <test app> --args --probe-escape
 // It needs ESC to English on in the running app. Keys go only while this probe's window is frontmost.
 // A physical Caps Lock press cannot be generated: posted Caps Lock events do not toggle the lock.
@@ -486,15 +486,15 @@ func probeEscape() throws {
     func failure(_ code: Int, _ message: String) -> NSError { NSError(domain: "probe", code: code, userInfo: [NSLocalizedDescriptionKey: message]) }
     let app = NSApplication.shared
     app.setActivationPolicy(.regular); app.finishLaunching()
-    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gkdl bundle with open -n so the probe has its accessibility permission.") }
+    guard AXIsProcessTrusted() else { throw failure(1, "Grant the gkdl dev tests app Accessibility permission, then launch it with open -n.") }
     // The running app's settings, read only.
-    let saved = UserDefaults.standard
+    let saved = UserDefaults(suiteName: "com.zzune.gkdl")!
     let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
-    guard NSRunningApplication.runningApplications(withBundleIdentifier: "kr.twentyoz.gkdl").contains(where: { $0.processIdentifier != getpid() }),
+    guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.zzune.gkdl").contains(where: { $0.processIdentifier != getpid() }),
           saved.object(forKey: "active") == nil || saved.bool(forKey: "active"), saved.bool(forKey: "escapeToEnglish") else {
         throw failure(2, "Run gkdl with ESC to English turned on first.")
     }
-    let suite = "kr.twentyoz.gkdl.escape-probe.\(UUID().uuidString)"
+    let suite = "io.gksdud.escape-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     guard let korean = delegate.availableSource("ko"), let english = delegate.availableSource("en") else {
@@ -543,7 +543,7 @@ func probeEscape() throws {
         }
     }
     func frontmost() -> Bool { panel.isKeyWindow && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() }
-    // Through the HID stream, so the running gkdl's tap and the system shortcut see it. Posted flags also become the
+    // Through the HID stream, so the running gksdud's tap and the system shortcut see it. Posted flags also become the
     // session's flags, so they carry the Caps Lock lock.
     func post(_ code: Int, hold: TimeInterval = 0) throws {
         guard frontmost() else { throw failure(4, "The probe window lost focus; no more keys were sent.") }
@@ -699,7 +699,7 @@ func runUpdateInstallTests() throws {
 }
 
 func runPrereleaseTests() {
-    let suite = "kr.twentyoz.gkdl.channel-tests.\(UUID().uuidString)"
+    let suite = "io.gksdud.channel-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let tag = "pre-v1.3.0"
@@ -882,8 +882,8 @@ func runAddedSourceTests() {
         "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", "com.apple.keylayout.ABC-AZERTY"], "Entries map to sources until one does not")
     print("PASS: added input sources: cycle order, other layouts, outside the list, missing sources, separate key and back, history, badges, switch plans, landing, notifications, system history")
 }
-// Drives the running gkdl with its switch keys, then reads the input source and what this probe's text view receives.
-// Launch the test app from build.sh, signed like the installed one, so it has gkdl's Accessibility permission:
+// Drives the running gksdud with its switch keys, then reads the input source and what this probe's text view receives.
+// Grant the separate test app from build.sh its own Accessibility permission:
 // open -n -W --stdout <file> <test app> --args --probe-input-sources
 // Needs Korean, English and one more input source. It turns added sources on in the running app's settings, which this
 // probe shares, and puts them back afterwards. Letters go only to this probe; switch keys go only while it is frontmost.
@@ -891,12 +891,12 @@ func probeInputSources() throws {
     func failure(_ code: Int, _ message: String) -> NSError { NSError(domain: "probe", code: code, userInfo: [NSLocalizedDescriptionKey: message]) }
     let app = NSApplication.shared
     app.setActivationPolicy(.regular); app.finishLaunching()
-    guard AXIsProcessTrusted() else { throw failure(1, "Launch the gkdl bundle with open -n so the probe has its accessibility permission.") }
-    let saved = UserDefaults.standard
+    guard AXIsProcessTrusted() else { throw failure(1, "Grant the gkdl dev tests app Accessibility permission, then launch it with open -n.") }
+    let saved = UserDefaults(suiteName: "com.zzune.gkdl")!
     let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
-    guard NSRunningApplication.runningApplications(withBundleIdentifier: "kr.twentyoz.gkdl").contains(where: { $0.processIdentifier != getpid() }),
+    guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.zzune.gkdl").contains(where: { $0.processIdentifier != getpid() }),
           saved.object(forKey: "active") == nil || saved.bool(forKey: "active") else { throw failure(2, "Run gkdl with activation on first.") }
-    let suite = "kr.twentyoz.gkdl.sources-probe.\(UUID().uuidString)"
+    let suite = "io.gksdud.sources-probe.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     let delegate = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
     let enabled = delegate.enabledSources()
@@ -934,7 +934,7 @@ func probeInputSources() throws {
             throw failure(4, "The probe window lost focus to \(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "?"); no more keys were sent.")
         }
     }
-    // Through the HID stream, so the running gkdl's tap and the system shortcut see it.
+    // Through the HID stream, so the running gksdud's tap and the system shortcut see it.
     func press(_ code: Int, _ flags: CGEventFlags = []) throws {
         try focus()
         for down in [true, false] {

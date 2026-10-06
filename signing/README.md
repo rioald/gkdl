@@ -1,11 +1,11 @@
 # gkdl 서명과 공증
 
-정식 배포 식별자는 `kr.twentyoz.gkdl`, Apple 팀은 `TWENTYOZ (KTC97BHY7R)`입니다.
+정식 배포 식별자는 `com.zzune.gkdl`, Apple 팀 ID는 `KTC97BHY7R`입니다.
 개인 키·인증서 내보내기 파일·암호·API 키는 저장소에 넣지 않습니다.
 
 ## 준비
 
-로컬 키체인에 `Developer ID Application: TWENTYOZ (KTC97BHY7R)` 인증서와 해당 개인 키가 필요합니다. 키체인이 서명 허용을 요청하면 사용자가 직접 macOS 창에서 승인합니다.
+로컬 키체인에 `Developer ID Application: TWENTYOZ (KTC97BHY7R)` 인증서와 해당 개인 키가 필요합니다. 인증서 이름은 Apple에 등록된 서명 주체이므로 앱 이름·식별자와 별개이며 임의로 바꾸지 않습니다. 이 이름은 서명 정보에 남습니다. 키체인이 서명 허용을 요청하면 사용자가 직접 macOS 창에서 승인합니다.
 
 Apple 공증 프로필은 로컬 터미널에서 대화형으로 등록합니다. 암호를 셸 명령이나 채팅에 넣지 마세요.
 
