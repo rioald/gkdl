@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 
 #if TESTS
 func runSettingsReentrancyTests() throws {
@@ -1127,13 +1128,29 @@ func runPermissionTests() {
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let keyboard = TestKeyboard("perm-1", name: "Keyboard", serial: "permission")
-    let untouched = ShortcutPreferences(read: { [:] }, write: { _ in preconditionFailure("Nothing to restore") }, activate: {})
-    let engine = Engine(defaults: defaults, discover: { [keyboard] }, shortcutPreferences: untouched)
+    let original: [String: Any] = ["enabled": true, "value": ["type": "standard", "parameters": [32, 49, 262144]]]
+    var keys: [String: Any] = ["60": original]
+    var menu: CFPropertyList?
+    var activations = 0
+    let shortcuts = ShortcutPreferences(read: { keys }, write: { keys = $0 }, activate: { activations += 1 })
+    let inputMenu = InputMenuPreference(read: { menu }, write: { menu = $0 })
+    let engine = Engine(defaults: defaults, discover: { [keyboard] }, shortcutPreferences: shortcuts, inputMenu: inputMenu)
     var trusted = false
     engine.accessibilityTrusted = { trusted }
     defaults.set(true, forKey: "active")
     let delegate = AppDelegate(engine: engine)
+    var loginStatus: SMAppService.Status = .notRegistered
+    var registrations = 0
+    delegate.loginItemStatus = { loginStatus }
+    delegate.registerLoginItem = { registrations += 1; loginStatus = .requiresApproval }
+    delegate.unregisterLoginItem = { loginStatus = .notRegistered }
     delegate.buildWindow()
+    delegate.configureLoginItem(isDevelopment: true)
+    precondition(registrations == 0 && !defaults.bool(forKey: "loginItemInitialized"), "Development never registers a login item automatically")
+    delegate.configureLoginItem(isDevelopment: false)
+    precondition(registrations == 1 && delegate.login.state == .on, "A fresh release registers at login; pending approval remains selected")
+    delegate.configureLoginItem(isDevelopment: false)
+    precondition(registrations == 1, "Default registration runs once")
     delegate.updatePressAccess()
     let settings: [NSControl] = [delegate.enabled, delegate.login, delegate.showInMenuBar, delegate.iconPicker, delegate.picker,
                                  delegate.advancedButton, delegate.longPressSwitch, delegate.escapeSwitch, delegate.addedSources.enable] + delegate.specialButtons
@@ -1145,13 +1162,38 @@ func runPermissionTests() {
     precondition(delegate.window.attachedSheet == nil, "Holding several keys, the picker does not open their sheet either")
     delegate.resetSelection()
     delegate.repair()
-    precondition(!engine.active && delegate.enabled.state == .off, "Activation turns off")
+    precondition(engine.active && delegate.enabled.state == .on && keyboard.mappings.isEmpty && Engine.sameShortcut(keys["60"], original) && menu == nil,
+        "Permission waiting keeps activation selected and leaves macOS unchanged")
     trusted = true
+    delegate.repair()
+    precondition(engine.active && !keyboard.mappings.isEmpty && Engine.ownsShortcut(keys["60"], keyCode: engine.target.keyCode) && (menu as? NSNumber)?.boolValue == false,
+        "Granting permission applies mappings, shortcut and input menu without another activation click")
+    let applied = activations
+    delegate.repair()
+    precondition(activations == applied, "Periodic repair does not repeatedly activate system settings")
+    trusted = false
+    delegate.repair()
+    precondition(engine.active && keyboard.mappings.isEmpty && Engine.sameShortcut(keys["60"], original) && menu == nil, "Revoking permission restores macOS and keeps the saved choice")
+    trusted = true
+    delegate.repair()
+    precondition(!keyboard.mappings.isEmpty, "Permission regrant resumes activation")
+    try! engine.restore()
+    delegate.resetSelection()
+    trusted = false; delegate.repair()
+    trusted = true; delegate.repair()
+    precondition(!engine.active && delegate.enabled.state == .off && keyboard.mappings.isEmpty, "A user-disabled app stays disabled after regrant")
     // The section refreshes while the window shows; this one is not on screen.
     delegate.updatePressAccess(); delegate.addedSources.refresh(force: true)
     precondition(settings.allSatisfy { $0.isEnabled } && !delegate.pressAccess.isEnabled)
     precondition(delegate.settingLabels.allSatisfy { $0.label.textColor == $0.color })
-    precondition(!engine.active && delegate.enabled.state == .off, "It stays off until turned on again")
+    delegate.login.state = .off; delegate.toggleLogin()
+    delegate.configureLoginItem(isDevelopment: false)
+    precondition(registrations == 1 && delegate.login.state == .off, "Turning off login is not undone by default setup")
+    defaults.removeObject(forKey: "loginItemInitialized")
+    let existing = AppDelegate(engine: Engine(defaults: defaults, discover: { [] }))
+    existing.loginItemStatus = { loginStatus }
+    existing.registerLoginItem = { preconditionFailure("Existing installation must keep its login choice") }
+    existing.configureLoginItem(isDevelopment: false)
     // Replacing the Mac input menu is on by default and works only while this app's icon shows.
     precondition(delegate.replaceInputMenu.state == .on && delegate.replaceInputMenu.isEnabled && !engine.showsSystemInputMenu)
     delegate.replaceInputMenu.state = .off; delegate.toggleReplaceInputMenu()
@@ -1169,7 +1211,7 @@ func runPermissionTests() {
     precondition(shown != nil && delegate.inputBadge.image === shown, "An unchanged source keeps its image")
     delegate.iconPicker.selectItem(at: (delegate.iconStyle + 1) % 5); delegate.changeIconStyle()
     precondition(delegate.inputBadge.image !== shown, "Another style shows at once")
-    print("PASS: without Accessibility, settings disabled and activation off; granted again, settings back and activation still off; replacing the Mac input menu; indicator image kept while unchanged")
+    print("PASS: permission waiting, grant/revoke/regrant, explicit off preserved, fresh login registration, pending approval, login opt-out and development isolation; input menu and indicator")
 }
 
 func runMenuBarIconTests() {

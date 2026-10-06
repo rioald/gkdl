@@ -107,7 +107,7 @@ extension AppDelegate {
         full(activation, in: general); keyboardWarningRow.isHidden = true
         general.setCustomSpacing(28, after: activation)
         login.target = self; login.action = #selector(toggleLogin)
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = startsAtLogin ? .on : .off
         showInMenuBar.target = self; showInMenuBar.action = #selector(toggleHidden)
         showInMenuBar.state = engine.defaults.bool(forKey: "hidden") ? .off : .on
         general.addArrangedSubview(login); general.addArrangedSubview(showInMenuBar)

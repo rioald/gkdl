@@ -130,6 +130,7 @@ struct InputMenuPreference {
 
 final class Engine {
     let defaults: UserDefaults
+    let isFirstLaunch: Bool
     let keyboards: KeyboardManager
     let shortcutPreferences: ShortcutPreferences
     let inputMenu: InputMenuPreference
@@ -138,6 +139,7 @@ final class Engine {
     init(defaults: UserDefaults = .standard, discover: @escaping () throws -> [KeyboardDevice] = HIDKeyboardDevice.discover,
          shortcutPreferences: ShortcutPreferences = .system, inputMenu: InputMenuPreference = .system) {
         self.defaults = defaults
+        isFirstLaunch = defaults.object(forKey: "keyboardRecordsBoot") == nil && defaults.object(forKey: "active") == nil
         self.shortcutPreferences = shortcutPreferences
         self.inputMenu = inputMenu
         keyboards = KeyboardManager(defaults: defaults, discover: discover)
@@ -605,6 +607,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func iconLabel(korean: Bool) -> String { korean ? (iconStyle == 4 ? "하이" : iconStyle == 2 ? "KO" : "한") : ["dud", "A", "EN", "캐릭터", "gkdl"][iconStyle] }
     let enabled = NSButton(checkboxWithTitle: "활성화", target: nil, action: nil)
     let login = NSButton(checkboxWithTitle: "로그인 시 시작", target: nil, action: nil)
+    var loginItemStatus: () -> SMAppService.Status = { SMAppService.mainApp.status }
+    var registerLoginItem: () throws -> Void = { try SMAppService.mainApp.register() }
+    var unregisterLoginItem: () throws -> Void = { try SMAppService.mainApp.unregister() }
+    var startsAtLogin: Bool { loginItemStatus() == .enabled || loginItemStatus() == .requiresApproval }
+    func configureLoginItem(isDevelopment: Bool = AppIdentity.isDevelopment) {
+        guard !isDevelopment, !engine.defaults.bool(forKey: "loginItemInitialized") else { return }
+        engine.defaults.set(true, forKey: "loginItemInitialized")
+        // Existing installations and a login item disabled in System Settings keep their choice.
+        guard engine.isFirstLaunch, loginItemStatus() == .notRegistered else { return }
+        do { try registerLoginItem() } catch { report(error) }
+        login.state = startsAtLogin ? .on : .off
+    }
     let showInMenuBar = NSButton(checkboxWithTitle: "메뉴바에 표시", target: nil, action: nil)
     let replaceInputMenu = NSButton(checkboxWithTitle: "Mac 입력기 아이콘 대체", target: nil, action: nil)
     let status = NSTextField(wrappingLabelWithString: "")
@@ -658,12 +672,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let koreanCapsSwitch = NSButton(checkboxWithTitle: "한글 상태에서도 Caps Lock으로 대소문자 전환", target: nil, action: nil)
     let escapeSwitch = NSButton(checkboxWithTitle: "ESC 누를 시 영소문자로 변경", target: nil, action: nil)
     var returningFromPermissionSettings = false
+    var waitingForAccess = false
     var permissionSettingsWasActive = false
     func finishPermissionVisit() {
         guard returningFromPermissionSettings else { return }
         returningFromPermissionSettings = false
         permissionSettingsWasActive = false
-        ensureKeyTap()
+        repair()
         showSettings()
     }
     func windowWillClose(_ notification: Notification) {
@@ -1069,6 +1084,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         editEntry.submenu = editMenu; mainMenu.addItem(editEntry)
         NSApp.mainMenu = mainMenu
         buildWindow()
+        configureLoginItem()
         updateMenu()
         updates.onChange = { [weak self] in self?.refreshUpdates() }
         installer.onChange = { [weak self] in self?.refreshUpdates() }
@@ -1118,7 +1134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     func applicationDidBecomeActive(_ notification: Notification) {
         guard window != nil else { return }
-        ensureKeyTap()
+        repair()
         if returningFromPermissionSettings && permissionSettingsWasActive { finishPermissionVisit() }
     }
     @objc func showKeyboardSettings() {
@@ -1310,7 +1326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         menuInputTimer = refresh
         RunLoop.main.add(refresh, forMode: .eventTracking)
-        login.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        login.state = startsAtLogin ? .on : .off
         for entry in menu.items {
             switch entry.action {
             case #selector(menuEnabled): entry.state = engine.active ? .on : .off; entry.isEnabled = engine.accessibilityTrusted()
@@ -1338,7 +1354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func selectKorean() { selectLanguage("ko") }
     @objc func selectEnglish() { selectLanguage("en") }
     @objc func menuEnabled() { enabled.state = engine.active ? .off : .on; toggleEnabled() }
-    @objc func menuLogin() { login.state = SMAppService.mainApp.status == .enabled ? .off : .on; toggleLogin() }
+    @objc func menuLogin() { login.state = startsAtLogin ? .off : .on; toggleLogin() }
     @objc func menuHidden() { showInMenuBar.state = showInMenuBar.state == .on ? .off : .on; toggleHidden() }
     @objc func showSettings() { if !window.isVisible { selectTab(0) }; window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { if showInMenuBar.state == .off { showSettings() }; return true }
@@ -1352,10 +1368,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if engine.active { do { try engine.updateSystemInputMenu() } catch { report(error) } }
     }
     @objc func toggleLogin() {
+        engine.defaults.set(true, forKey: "loginItemInitialized")
         do {
-            if login.state == .on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            if login.state == .on { try registerLoginItem() } else { try unregisterLoginItem() }
+            login.state = startsAtLogin ? .on : .off
             stickyError = ""; refreshStatus()
-        } catch { login.state = SMAppService.mainApp.status == .enabled ? .on : .off; report(error) }
+        } catch { login.state = startsAtLogin ? .on : .off; report(error) }
     }
     func resetSelection() {
         picker.show(engine.defaultSources)
@@ -1444,8 +1462,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     func repair() {
         guard !engine.isUpdatingSettings else { return }
-        // Without Accessibility there is no tap to switch with, so activation turns off and stays off until turned on again.
-        if engine.active && !engine.accessibilityTrusted() { restoreNow(); return }
+        // Restore macOS while waiting, but retain activation so granting permission resumes it.
+        if !engine.accessibilityTrusted() {
+            waitingForAccess = true
+            stopKeyTap()
+            do { try engine.restoreSystem() } catch { report(error) }
+            updatePressAccess(); refreshKeyboardState(); refreshStatus()
+            return
+        }
+        if waitingForAccess {
+            do { try engine.resume(); waitingForAccess = false } catch { report(error); return }
+        }
         ensureKeyTap()
         do { try engine.repair(); if repairFailed { repairFailed = false; stickyError = "" } } catch { report(error); repairFailed = !(error is KeyboardError) }
         // This follows the session itself, as the unlock notice can come late. Not at once: right after unlocking, the lock
@@ -1461,9 +1488,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let result = engine.keyboards.result
         status.stringValue = result.pending > 0 ? "키보드 설정을 다시 적용하고 있습니다."
             : !stickyError.isEmpty ? stickyError
-            : !engine.chosenCombos.isEmpty && !AXIsProcessTrusted() ? "조합 키를 쓰려면 접근성 권한을 허용하세요."
+            : engine.active && !engine.accessibilityTrusted() ? "접근성 권한을 허용하면 자동으로 활성화됩니다."
             : engine.active && result.selected == 0 && !engine.mappedSources.isEmpty ? "적용할 키보드 연결 대기 중"
-            : window.isVisible && login.state == .on && SMAppService.mainApp.status == .requiresApproval ? "시스템 설정 → 로그인 항목에서 \(AppIdentity.name)을 허용하세요." : ""
+            : window.isVisible && login.state == .on && loginItemStatus() == .requiresApproval ? "시스템 설정 → 로그인 항목에서 \(AppIdentity.name)을 허용하세요." : ""
     }
     var lastError = ""
     var stickyError = ""
