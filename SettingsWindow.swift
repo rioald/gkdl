@@ -215,14 +215,10 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let description = NSTextField(wrappingLabelWithString: "gkdl은 두벌식으로 ‘하이’를 입력한 이름입니다.\ngksdud의 기능과 설정을 유지하면서\n아차차와 하이 / gkdl 스타일을 더했습니다.")
-        description.font = .systemFont(ofSize: 11); description.textColor = .secondaryLabelColor; description.alignment = .center
-        full(description, in: about)
-        let credits = NSTextField(wrappingLabelWithString: "gkdl (하이) · © 2026 rioald\ngksdud 원작 기반 · © 2026 CodingNoye · MIT")
+        let credits = NSTextField(wrappingLabelWithString: "gkdl · © 2026 rioald · MIT\nbased on\ngksdud · © 2026 CodingNoye · MIT")
         credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
         about.addArrangedSubview(credits)
-        let license = NSButton(title: "오픈소스 라이선스", target: self, action: #selector(openLicense)); license.bezelStyle = .rounded
-        about.addArrangedSubview(NSStackView(views: [link("원본 프로젝트", icon: "github", action: #selector(openUpstream)), license]))
+        about.addArrangedSubview(link("Github - gksdud", icon: "github", action: #selector(openUpstream)))
         about.addArrangedSubview(link("원작 개발자 후원 · Fairy", icon: "fairy", template: false, action: #selector(openSupport)))
         selectTab(0); updatePressAccess(); refreshSpecialMode(); refreshUpdates(); refreshIconPreviews(); refreshKeyboardState(); updateInputIndicator()
     }
@@ -278,9 +274,6 @@ extension AppDelegate {
     }
     @objc func openSupport() { NSWorkspace.shared.open(URL(string: "https://fairy.hada.io/@gksdud")!) }
     @objc func openUpstream() { NSWorkspace.shared.open(URL(string: "https://github.com/codingnoye/gksdud")!) }
-    @objc func openLicense() {
-        if let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil) { NSWorkspace.shared.open(url) }
-    }
     @objc func openProject() { NSWorkspace.shared.open(URL(string: "https://github.com/rioald/gkdl")!) }
     func refreshUpdates() {
         let release = updates.available
