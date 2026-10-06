@@ -19,6 +19,8 @@
 
 <img src="docs/screenshots/general.png" width="384" alt="gkdl 일반 설정: 한영 전환 키와 메뉴바 스타일 선택" />
 
+
+
 ## 기능 안내
 
 ### 아차차 — 잘못 입력한 단어 바로잡기
@@ -61,6 +63,8 @@
 - **특수문자** 탭: 한글 상태에서도 `Option + 문자`로 영어 입력 상태와 같은 특수문자를 입력하거나, Option 특수문자 입력을 비활성화할 수 있습니다.
 - **추가기능** 탭: 중국어·일본어 등 다른 입력 소스를 한영 키로 순회하거나, 별도 키로 전환할 수 있습니다. 다국어 지원은 beta 기능입니다.
 
+
+
 ## 설치
 
 **macOS 13 Ventura 이상 · Apple Silicon / Intel 지원**
@@ -68,21 +72,22 @@
 Homebrew로 설치하려면:
 
 ```sh
-brew install --cask rioald/tap/gkdl
+brew install rioald/tap/gkdl
 ```
 
 직접 설치하려면 [최신 릴리스](https://github.com/rioald/gkdl/releases/latest)에서 ZIP을 내려받아 압축을 풀고, `gkdl.app`을 **응용 프로그램** 폴더로 옮기세요.
 
 ### 처음 실행할 때
 
-1. 기존 gksdud가 실행 중이면 메뉴에서 정상 종료한 뒤 gkdl을 실행합니다.
-2. 메뉴바의 **gkdl 아이콘 → 설정**을 엽니다.
-3. **접근성 권한 허용**을 누르고, **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 gkdl을 켭니다.
-4. 접근성 권한을 허용하면 한영 전환과 아차차를 바로 사용할 수 있습니다. 필요하면 **일반** 탭에서 한영 전환 키를, **아차차** 탭에서 단축키를 바꾸세요.
+1. 메뉴바의 **gkdl 아이콘 → 설정**을 엽니다.
+2. **접근성 권한 허용**을 누르고, **시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용**에서 gkdl을 켭니다.
+3. 접근성 권한을 허용하면 한영 전환과 아차차를 바로 사용할 수 있습니다. 필요하면 **일반** 탭에서 한영 전환 키를, **아차차** 탭에서 단축키를 바꾸세요.
 
 새 설치에서는 **활성화**와 **로그인 시 시작**이 기본으로 선택됩니다. 기존에 끈 설정은 유지합니다. macOS에서 로그인 항목 승인을 요청하면 시스템 설정에서 허용하세요.
 
 gkdl은 메뉴바에서 사용하는 앱입니다. 창이 보이지 않으면 메뉴바 아이콘에서 설정을 여세요. gksdud와 gkdl의 권한·설정은 별도이며, 두 앱을 동시에 활성화하지 마세요.
+
+
 
 ## 업데이트
 
@@ -90,22 +95,16 @@ gkdl은 메뉴바에서 사용하는 앱입니다. 창이 보이지 않으면 �
 
 ```sh
 brew update
-brew upgrade --cask --greedy rioald/tap/gkdl
+brew upgrade --greedy rioald/tap/gkdl
 ```
 
 기존 ZIP 설치본을 Homebrew로 관리하거나 설치 오류를 해결하려면 [Homebrew 설치 안내](https://github.com/rioald/homebrew-tap#readme)를 참고하세요.
 
-## 삭제
 
-메뉴에서 gkdl을 정상 종료해 키보드 설정을 복원한 뒤 삭제하세요.
-
-- **ZIP 설치**: 응용 프로그램 폴더에서 `gkdl.app`을 삭제합니다.
-- **Homebrew 설치**: `brew uninstall --cask gkdl`을 실행합니다.
 
 ## 출처·라이선스
 
 한영 전환 기능은 [gksdud](https://github.com/codingnoye/gksdud)를 기반으로 합니다. 원작의 기능과 동작 방식은 [gksdud v1.6.0 README](https://github.com/codingnoye/gksdud/blob/54debb68ac31bb11af372d671a730c74b7be2dd4/README.md)에서 확인할 수 있습니다.
 
 gkdl · © 2026 rioald · [MIT](LICENSE)<br>
-based on<br>
-[gksdud](https://github.com/codingnoye/gksdud) · © 2026 CodingNoye · [MIT](LICENSE)
+based on [gksdud](https://github.com/codingnoye/gksdud) · © 2026 CodingNoye · [MIT](LICENSE)
