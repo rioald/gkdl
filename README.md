@@ -46,9 +46,7 @@
 - **길게 눌러 대소문자 전환**: 누르는 즉시 한영을 전환하고, 길게 유지하면 대소문자를 전환합니다.
 - **대문자 상태 보존**: 영문 대문자 상태에서 한글로 전환해도 영어로 돌아오면 대문자 상태를 유지합니다.
 
-<img width="502" alt="원작 gksdud의 한영 전환과 길게 눌러 대소문자 전환하는 동작 예시" src="https://github.com/user-attachments/assets/faf9f36d-bbff-4c5f-8a53-785948fc32cc" />
-
-*원작 gksdud의 동작 예시입니다.*
+<img src="docs/screenshots/caps-lock.png" width="384" alt="gkdl 대소문자 설정: 길게 눌러 대소문자 전환과 대문자 상태 보존" />
 
 ### 메뉴바 스타일
 
@@ -56,9 +54,7 @@
 
 **일반** 탭에서 원작의 **한 / dud**, **한 / A**, **KO / EN**, **ㅎuㅎ / dud**도 선택할 수 있습니다. 기존에 선택한 스타일은 유지합니다. 메뉴바 아이콘은 `Command + 드래그`로 위치를 옮길 수 있으며, 기존 입력기 아이콘을 대신해 사용할 수 있습니다.
 
-<img width="210" alt="원작 gksdud의 입력 상태 표시와 메뉴바 스타일 예시" src="https://github.com/user-attachments/assets/9719494e-8f66-4768-859e-c7c4f5cb2db4" />
-
-*원작 gksdud의 메뉴바 스타일 예시입니다.*
+<img src="docs/screenshots/menu-bar-styles.png" width="384" alt="gkdl 메뉴바 스타일 선택: 원작의 네 가지와 하이 / gkdl, 한글·영문 아이콘 미리보기" />
 
 ### 특수문자와 다국어
 
