@@ -18,7 +18,7 @@ bash build.sh
 open "outputs/dev/gkdl dev.app" --args --settings
 ```
 
-일반 앱에서 테스트 코드를 제외하고, 별도 `gkdl dev tests.app`에 `-D TESTS`를 넣어 자체 테스트를 실행합니다. 한영 전환·잠금화면 복구·아차차 변환·업데이트 검증과 교체 실패 복원 등을 확인합니다. 개발 기본 서명은 ad-hoc이며, 개발 앱은 정식 릴리스 업데이트를 조회하거나 설치하지 않습니다.
+일반 앱에서 테스트 코드를 제외하고, 별도 `gkdl dev tests.app`에 `-D TESTS`를 넣어 자체 테스트를 실행합니다. 한영 전환·잠금화면 복구·아차차 변환·CLI 설정과 일시정지·Caps Lock 아이콘·유니버설 컨트롤 판정·업데이트 검증과 교체 실패 복원 등을 확인합니다. 개발 기본 서명은 ad-hoc이며, 개발 앱은 정식 릴리스 업데이트를 조회하거나 설치하지 않습니다.
 
 정식 앱 빌드는 `GKDL_BUILD_VARIANT=release bash build.sh`로 구분합니다. 아래 배포 스크립트는 이 값을 자동으로 지정하며, 기존 `gkdl.app` 이름·식별자·배포 파일명을 유지합니다.
 

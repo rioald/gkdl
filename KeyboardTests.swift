@@ -627,10 +627,11 @@ func renderKeyboardUI(to directory: String) throws {
     devices = [builtIn, virtual]
     virtual.mappings = []; virtual.failWrite = true
     for _ in 0..<3 { _ = engine.keyboards.reconcile(sources: [sources[0]], target: f19, active: true) }
-    let previewRelease = AppRelease(tag_name: "v9.0.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v9.0.0", body: "## 요약\n- 설정을 일반·대소문자·특수문자·gkdl 탭으로 나눴습니다.\n- 한글에서도 Option 특수문자를 입력할 수 있습니다.\n- 새 버전이 나오면 메뉴에서 알려드립니다.\n\n## 설치\n요약에 나타나면 안 됩니다.", draft: false, prerelease: false)
-    defaults.set(try JSONEncoder().encode(previewRelease), forKey: "updates.release")
+    let previewRelease = AppRelease(tag_name: "v9.0.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v9.0.0", body: "## 요약\n- 설정을 일반·대소문자·특수문자·gksdud 탭으로 나눴습니다.\n- 한글에서도 Option 특수문자를 입력할 수 있습니다.\n- 새 버전이 나오면 메뉴에서 알려드립니다. 자세히: https://github.com/rioald/gkdl\n\n## 경고\n- 업데이트 후 손쉬운 사용 권한을 다시 허용해주세요. [방법 보기](https://support.apple.com/guide/mac-help/mh43185/mac)\n\n## 설치\n요약에 나타나면 안 됩니다.", draft: false, prerelease: false)
+    let olderRelease = AppRelease(tag_name: "v8.9.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v8.9.0", body: "## 요약\n- 이전 버전 항목입니다.", draft: false, prerelease: false)
+    defaults.set(try JSONEncoder().encode([previewRelease, olderRelease]), forKey: "updates.releases")
     let delegate = AppDelegate(engine: engine)
-    delegate.updates = UpdateChecker(defaults: defaults)
+    delegate.updates = UpdateChecker(defaults: defaults, channel: .stable)
     delegate.buildWindow()
     delegate.window.makeFirstResponder(nil)
     delegate.updateMenu()
@@ -697,10 +698,30 @@ func renderKeyboardUI(to directory: String) throws {
     precondition(updateEntry.action == #selector(AppDelegate.showAbout) && !updateEntry.isHidden)
     delegate.showAbout()
     precondition(delegate.selectedTab == 5 && !delegate.updateButton.isHidden)
-    precondition(!delegate.updateSummary.string.contains("요약에 나타나면"))
-    delegate.updates = UpdateChecker(defaults: defaults, installedVersion: "9.0.0")
+    precondition(!delegate.updateSummary.string.contains("요약에 나타나면") && !delegate.updateSummary.string.contains("권한")
+        && delegate.updateSummary.string.hasPrefix("v9.0.0\n* 설정을") && delegate.updateSummary.string.hasSuffix("\n\nv8.9.0\n* 이전 버전 항목입니다."))
+    // Links in the release notes open from the summary and the warning alert.
+    func link(_ text: NSAttributedString, at words: String) -> URL? {
+        let range = (text.string as NSString).range(of: words)
+        return range.location == NSNotFound ? nil : text.attribute(.link, at: range.location + range.length - 1, effectiveRange: nil) as? URL
+    }
+    precondition(link(delegate.updateSummary.textStorage!, at: "https://github.com/rioald/gkdl")?.absoluteString == "https://github.com/rioald/gkdl")
+    precondition(link(delegate.updateSummary.textStorage!, at: "v8.9.0")?.absoluteString == "https://github.com/rioald/gkdl/releases/tag/v8.9.0")
+    // Installing asks about the warnings first; cancelling leaves the installer untouched.
+    var warningAlerts: [NSAlert] = []
+    delegate.runAlert = { alert in
+        warningAlerts.append(alert); alert.layout(); try? save(alert.window.contentView!, "update-warning-alert.png"); return .alertSecondButtonReturn
+    }
+    delegate.updateButton.performClick(nil)
+    let warningText = (warningAlerts.first?.accessoryView as? NSTextView)?.textStorage
+    precondition(warningAlerts.count == 1 && warningText?.string == "v9.0.0\n* 업데이트 후 손쉬운 사용 권한을 다시 허용해주세요. 방법 보기" && !delegate.installer.busy && delegate.installer.status.isEmpty)
+    precondition(link(warningText!, at: "방법 보기")?.absoluteString == "https://support.apple.com/guide/mac-help/mh43185/mac"
+        && link(warningText!, at: "v9.0.0")?.absoluteString == "https://github.com/rioald/gkdl/releases/tag/v9.0.0")
+    precondition(warningAlerts[0].buttons.map(\.title) == ["업데이트 설치", "취소"])
+    delegate.runAlert = { $0.runModal() }
+    delegate.updates = UpdateChecker(defaults: defaults, installedVersion: "9.0.0", channel: .stable)
     delegate.refreshUpdates()
-    precondition(delegate.tabButtons[5].accessibilityLabel() == "gkdl 탭" && delegate.updateButton.isHidden && updateEntry.isHidden)
+    precondition(delegate.tabButtons[5].accessibilityLabel() == "\(AppIdentity.name) 탭" && delegate.updateButton.isHidden && updateEntry.isHidden)
     defaults.set(false, forKey: "active")
     delegate.resetSelection()
     // Right Control goes last: the screenshots and later checks start from it.
@@ -1152,7 +1173,7 @@ func runPermissionTests() {
     delegate.configureLoginItem(isDevelopment: false)
     precondition(registrations == 1, "Default registration runs once")
     delegate.updatePressAccess()
-    let settings: [NSControl] = [delegate.enabled, delegate.login, delegate.showInMenuBar, delegate.iconPicker, delegate.picker,
+    let settings: [NSControl] = [delegate.enabled, delegate.login, delegate.showInMenuBar, delegate.iconPicker, delegate.iconCaseSwitch, delegate.picker,
                                  delegate.advancedButton, delegate.longPressSwitch, delegate.escapeSwitch, delegate.addedSources.enable] + delegate.specialButtons
     precondition(settings.allSatisfy { !$0.isEnabled } && delegate.pressAccess.isEnabled, "Only the permission button is left")
     precondition(delegate.settingLabels.allSatisfy { $0.label.textColor == .disabledControlTextColor }, "Titles and hints dim too")
@@ -1248,17 +1269,79 @@ func runMenuBarIconTests() {
             let image = delegate.sourceMenuIcon(korean: korean)
             precondition(image.isTemplate && image.tiffRepresentation != nil, "Both input states render as contrast-aware templates")
             if index == 4 {
-                let text = NSAttributedString(string: delegate.iconLabel(korean: korean), attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .semibold)])
+                let text = NSAttributedString(string: iconLabel(style: index, korean: korean), attributes: [.font: NSFont.systemFont(ofSize: 10.5, weight: .semibold)])
                 precondition(image.size.width >= text.size().width + 4, "Full words have room inside the badge")
             }
         }
         precondition(delegate.item!.length == delegate.inputBadge.image!.size.width + 6, "Status item follows the actual image width")
     }
     let release = AppRelease(tag_name: "v99.0.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v99.0.0", body: "", draft: false, prerelease: false)
-    defaults.set(try! JSONEncoder().encode(release), forKey: "updates.release")
+    defaults.set(try! JSONEncoder().encode([release]), forKey: "updates.releases")
     let disabled = UpdateChecker(defaults: defaults, enabled: false, fetch: { _, _ in preconditionFailure("Development apps must not fetch release updates") })
     disabled.check(); disabled.check(force: true)
     precondition(disabled.available == nil && !disabled.checking, "Cached updates cannot replace a development app either")
     print("PASS: four upstream menu icon choices plus 하이 / gkdl, fresh default, legacy migration, persistence, rendering width, development update isolation")
+}
+func runIconCaseTests() {
+    _ = NSApplication.shared
+    let suite = "com.zzune.gkdl.icon-case-tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let engine = Engine(defaults: defaults, discover: { [] })
+    engine.accessibilityTrusted = { true }
+    let delegate = AppDelegate(engine: engine)
+    delegate.buildWindow()
+    // Off by default, every style looks as it did; on, only English follows Caps Lock.
+    // The character style draws a face, so only the lettered ones have labels.
+    precondition((0...2).map { iconLabel(style: $0, korean: false) } == ["dud", "A", "EN"]
+        && (0...2).map { iconLabel(style: $0, korean: true) } == ["한", "한", "KO"])
+    precondition((0...2).map { iconLabel(style: $0, korean: false, upper: false) } == ["dud", "a", "en"]
+        && (0...2).map { iconLabel(style: $0, korean: false, upper: true) } == ["DuD", "A", "EN"]
+        && (0...2).allSatisfy { iconLabel(style: $0, korean: true, upper: false) == iconLabel(style: $0, korean: true, upper: true) })
+    precondition(englishIconCase(inEnglish: true, lock: true, restores: false) && !englishIconCase(inEnglish: false, lock: true, restores: false)
+        && englishIconCase(inEnglish: false, lock: true, restores: nil), "Away from English, the case preservation restores")
+    let english = (source: InputSourceIdentity(id: "com.apple.keylayout.US", language: "en"), badge: "")
+    let korean = (source: InputSourceIdentity(id: capsSafeKorean, language: "ko"), badge: "")
+    let japanese = (source: InputSourceIdentity(id: "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", language: "ja"), badge: "JA")
+    func badge(_ indicator: (source: InputSourceIdentity, badge: String), caps: Bool) -> NSImage? {
+        delegate.indicator = indicator
+        delegate.observeCaps(caps); delegate.showIndicator()
+        return delegate.inputBadge.image
+    }
+    precondition(!delegate.showsIconCase && delegate.iconCaseSwitch.state == .off && delegate.iconCaseSwitch.isEnabled)
+    for style in 0...4 {
+        delegate.iconPicker.selectItem(at: style); delegate.changeIconStyle()
+        delegate.iconCaseSwitch.state = .off; delegate.toggleIconCase()
+        precondition(badge(english, caps: true) === badge(english, caps: false), "Off, Caps Lock changes nothing")
+        delegate.iconCaseSwitch.state = .on; delegate.toggleIconCase()
+        let lower = badge(english, caps: false), upper = badge(english, caps: true)
+        precondition(lower !== upper && delegate.englishPreview.image === upper, "On, English and its preview follow Caps Lock")
+        precondition(badge(korean, caps: true) === badge(korean, caps: false) && badge(japanese, caps: true) === badge(japanese, caps: false)
+            && delegate.inputBadge.image === delegate.badgeImage(label: "JA", filled: false), "Other sources stay as they were")
+        precondition(badge(english, caps: true) === upper, "The same icon is kept, not drawn again")
+    }
+    // Hiding the menu bar icon keeps the choice but turns it off and dims it, as with replacing the Mac input menu.
+    delegate.showInMenuBar.state = .off; delegate.toggleHidden()
+    precondition(!delegate.iconCaseSwitch.isEnabled && delegate.iconCaseSwitch.state == .on && !delegate.showsIconCase
+        && badge(english, caps: true) === badge(english, caps: false), "Hidden, the choice waits")
+    // Shown again without putting another icon in the real menu bar.
+    engine.defaults.set(false, forKey: "hidden"); delegate.showInMenuBar.state = .on; delegate.updatePressAccess()
+    precondition(delegate.iconCaseSwitch.isEnabled && delegate.showsIconCase && badge(english, caps: true) !== badge(english, caps: false))
+    delegate.iconCaseSwitch.state = .off; delegate.toggleIconCase()
+    // The lock seen last stands for the session's until no tap watches it.
+    delegate.observeCaps(!delegate.actualCaps)
+    precondition(delegate.currentCaps != delegate.actualCaps)
+    delegate.stopKeyTap()
+    precondition(delegate.observedCaps == nil && delegate.currentCaps == delegate.actualCaps)
+    // The character's D eye draws differently from its d.
+    func pixels(_ image: NSImage) -> Data {
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 44, pixelsHigh: 40, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        image.draw(in: NSRect(x: 0, y: 0, width: 44, height: 40)); NSGraphicsContext.restoreGraphicsState()
+        return Data(bytes: bitmap.bitmapData!, count: bitmap.bytesPerPlane)
+    }
+    precondition(pixels(DudIcon.badge(korean: false)) != pixels(DudIcon.badge(korean: false, upper: true)))
+    print("PASS: Caps Lock icon option, stable image caching, previews, hidden choice and observed caps")
 }
 #endif

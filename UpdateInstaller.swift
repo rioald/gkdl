@@ -77,6 +77,7 @@ enum UpdateProcessLauncher {
 // A new bundle must satisfy the currently installed app's certificate-bound identity.
 enum UpdateValidation {
     static let identifier = "com.zzune.gkdl"
+    static let appFolder = "gkdl.app"
     static let strict = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
     static func signedCode(_ path: URL) throws -> SecStaticCode {
         var code: SecStaticCode?
@@ -130,11 +131,11 @@ enum UpdateValidation {
         let actual = hash.finalize().map { String(format: "%02x", $0) }.joined()
         guard actual == matches[0] else { throw UpdateFailure("다운로드한 파일의 체크섬이 일치하지 않습니다. 다시 시도해주세요.") }
     }
-    static func archiveNames(_ names: String, listing: String) throws {
+    static func archiveNames(_ names: String, listing: String, app: String = appFolder) throws {
         let entries = names.split(separator: "\n", omittingEmptySubsequences: true)
         guard !entries.isEmpty, entries.count <= 5000,
               entries.allSatisfy({ name in
-                  (name == "gkdl.app/" || name.hasPrefix("gkdl.app/")) && !name.contains("\\")
+                  (name == "\(app)/" || name.hasPrefix("\(app)/")) && !name.contains("\\")
                       && !name.split(separator: "/").contains("..") && !name.contains("\r")
               }) else { throw UpdateFailure("업데이트 압축 파일의 경로가 올바르지 않습니다.") }
         // This app's archives contain only regular files/directories. Reject links

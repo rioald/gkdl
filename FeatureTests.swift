@@ -25,6 +25,16 @@ func runFeatureTests() {
     featureCheck(release("**요약**\n본문\n## 설치\n비표시").summary == "본문")
     featureCheck(release("## 설치\n설치 안내").summary == release(nil).summary)
     featureCheck(release("```\n## 요약\n잘못된 요약\n```\n## 요약\n정상\n## 설치").summary == "정상")
+    let warned = release("### 요약\n- 탭 추가\n\n### 경고\n- 접근성 권한을 다시 허용해주세요.\n  - 시스템 설정\n\n### 설치\n비표시")
+    featureCheck(warned.summary == "- 탭 추가" && warned.warning == "- 접근성 권한을 다시 허용해주세요.\n  - 시스템 설정", warned.warning)
+    featureCheck(warned.warningItems == ["* 접근성 권한을 다시 허용해주세요.", "  * 시스템 설정"] && sample.warning.isEmpty && release(nil).warningItems.isEmpty)
+    let linked = AppRelease.links("* [안내](https://github.com/rioald/gkdl/wiki) 참고, https://example.com/a.b. 주소 http://x.kr에서 [로컬](file:///etc) gkdl-1.0.zip")
+    featureCheck(linked.text == "* 안내 참고, https://example.com/a.b. 주소 http://x.kr에서 [로컬](file:///etc) gkdl-1.0.zip", linked.text)
+    featureCheck(linked.links.map { $0.url.absoluteString } == ["https://github.com/rioald/gkdl/wiki", "https://example.com/a.b", "http://x.kr"], "\(linked.links)")
+    featureCheck(linked.links.map { (linked.text as NSString).substring(with: $0.range) } == ["안내", "https://example.com/a.b", "http://x.kr"])
+    featureCheck(AppRelease.links("[https://a.com](https://a.com) https://").links.map { $0.range } == [NSRange(location: 0, length: 13)])
+    featureCheck(AppRelease.links("**https://a.com**").links.map { $0.url.absoluteString } == ["https://a.com"], "Bold marks are not part of the address")
+    featureCheck(release("**[경고]**\n권한\n## 설치").warning == "권한" && release("## [경고]\n권한").warning == "권한")
     featureCheck(sample.isNewer(than: "1.2.0") && !sample.isNewer(than: "1.3.0") && !sample.isNewer(than: "2.0.0"))
     featureCheck(!release(nil, draft: true).isNewer(than: "1.2.0"))
     featureCheck(!release(nil, pre: true).isNewer(than: "1.2.0"))
@@ -37,30 +47,53 @@ func runFeatureTests() {
     let suite = "io.gksdud.feature-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(try! JSONEncoder().encode(sample), forKey: "updates.release")
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.0").available?.tag_name == sample.tag_name,
+                 "Existing single-release caches remain available before the first new check")
+    let isolated = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", enabled: false, fetch: { _, _ in preconditionFailure("Development builds must not fetch releases") })
+    isolated.check(); isolated.check(force: true)
+    featureCheck(isolated.available == nil && isolated.summary.isEmpty && isolated.warnings.isEmpty && !isolated.checking,
+                 "Development builds cannot use an existing release cache")
     var now = Date(timeIntervalSince1970: 100_000), requests = 0
     var completion: ((Data?, URLResponse?, Error?) -> Void)?
-    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", now: { now }, fetch: { request, done in
+    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .stable, now: { now }, fetch: { request, done in
         requests += 1; completion = done
         featureCheck(request.url?.host == "api.github.com" && request.timeoutInterval == 20)
-        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases/latest", "Only the independent release repository is queried")
+        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100", "Only the independent release repository is queried")
     })
     func respond(_ status: Int, _ data: Data?) {
         completion?(data, HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: status, httpVersion: nil, headerFields: nil), nil)
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
     }
     checker.check(); checker.check(force: true); featureCheck(requests == 1, "Coalesce concurrent requests")
-    respond(200, try! JSONEncoder().encode(sample)); featureCheck(checker.available != nil && !checker.checking)
+    respond(200, try! JSONEncoder().encode([sample])); featureCheck(checker.available != nil && !checker.checking)
     checker.check(); featureCheck(requests == 1)
     now += 86401; checker.check(); featureCheck(requests == 2)
     respond(503, nil); featureCheck(checker.available != nil && checker.error != nil, "Offline checks preserve cached notification")
-    let relaunched = UpdateChecker(defaults: defaults, installedVersion: "1.2.0")
+    let relaunched = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .stable)
     featureCheck(relaunched.available != nil)
-    let upgraded = UpdateChecker(defaults: defaults, installedVersion: "1.3.0")
+    let upgraded = UpdateChecker(defaults: defaults, installedVersion: "1.3.0", channel: .stable)
     featureCheck(upgraded.available == nil)
     checker.check(force: true); respond(200, Data("{}".utf8)); featureCheck(checker.error != nil && checker.available != nil)
-    checker.check(force: true); respond(200, try! JSONEncoder().encode(release(nil, tag: "v1.2.0")))
+    checker.check(force: true); respond(200, try! JSONEncoder().encode([release(nil, tag: "v1.2.0")]))
     featureCheck(checker.available == nil && checker.error == nil)
-    print("PASS: numeric versions, release summary boundaries, trusted release URLs, daily schedule, retry/cache/offline/upgrade behavior")
+    func stable(_ version: String, _ body: String?) -> AppRelease { release(body, tag: "v\(version)", url: "https://github.com/rioald/gkdl/releases/tag/v\(version)") }
+    checker.check(force: true)
+    respond(200, try! JSONEncoder().encode([stable("1.2.5", "### 요약\n\n* 수정\n\n### 경고\n권한을 다시 허용\n\n### 설치\n비표시"), release(nil, tag: "pre-v1.4.0", pre: true),
+                                            release(nil, tag: "canary-v1.4.0", pre: true), stable("1.3.0", "### 요약\n- 탭 추가\n  - 세부\n+ 개선\n문장"),
+                                            stable("1.2.8", "### 요약\n- 작은 수정\n### 경고\n- 설정 초기화"), stable("1.2.0", "### 요약\n- 설치된 버전\n### 경고\n- 표시 안 함"), stable("1.1.0", nil)]))
+    featureCheck(checker.pending.map(\.tag_name) == ["v1.3.0", "v1.2.8", "v1.2.5"] && checker.available?.tag_name == "v1.3.0", "Newer stable releases, newest first")
+    func shown(_ text: String) -> String { AppRelease.links(text).text }
+    featureCheck(shown(checker.summary) == "v1.3.0\n* 탭 추가\n  * 세부\n* 개선\n* 문장\n\nv1.2.8\n* 작은 수정\n\nv1.2.5\n* 수정", checker.summary)
+    featureCheck(AppRelease.links(checker.summary).links.map { $0.url.absoluteString } == ["1.3.0", "1.2.8", "1.2.5"].map { "https://github.com/rioald/gkdl/releases/tag/v\($0)" },
+                 "Each version links to its release page")
+    featureCheck(shown(checker.warnings) == "v1.2.8\n* 설정 초기화\n\nv1.2.5\n* 권한을 다시 허용", "Warnings of every version the update installs: \(checker.warnings)")
+    let partly = UpdateChecker(defaults: defaults, installedVersion: "1.2.5", channel: .stable)
+    featureCheck(shown(partly.summary) == "v1.3.0\n* 탭 추가\n  * 세부\n* 개선\n* 문장\n\nv1.2.8\n* 작은 수정" && shown(partly.warnings) == "v1.2.8\n* 설정 초기화")
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.8", channel: .stable).warnings.isEmpty)
+    featureCheck(stable("1.3.0", nil).summaryItems == ["* " + release(nil).summary])
+    featureCheck(stable("1.3.0", nil).archiveName == "gkdl-1.3.0-macos-universal.zip", "Keep the published gkdl archive format")
+    print("PASS: numeric versions, trusted gkdl release URLs, daily schedule, retry/cache/offline/upgrade behavior, summaries and warnings of every newer version, links, gkdl archive format")
     do { try runUpdateInstallTests() } catch { preconditionFailure("Installer tests: \(error)") }
     runPrereleaseTests()
     runOptionInputTests()
@@ -653,12 +686,15 @@ func runUpdateInstallTests() throws {
     rejected { try UpdateValidation.checksum(archive, text: valid, name: "test.zip") }
     let names = "gkdl.app/\ngkdl.app/Contents/MacOS/gkdl\n"
     let listing = "drwxr-xr-x  2.1 unx 0 bx stor 00-Sep-00 00:00 gkdl.app/\n-rwxr-xr-x  2.1 unx 42 bx defN 00-Sep-00 00:00 gkdl.app/Contents/MacOS/gkdl\n"
-    try UpdateValidation.archiveNames(names, listing: listing)
-    rejected { try UpdateValidation.archiveNames(names.replacingOccurrences(of: "gkdl", with: "gksdud"), listing: listing) }
-    rejected { try UpdateValidation.archiveNames("gkdl.app/../../escape", listing: listing) }
-    rejected { try UpdateValidation.archiveNames("/gkdl.app/file", listing: listing) }
-    rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "-rwx", with: "lrwx")) }
-    rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "42 bx", with: "999999999 bx")) }
+    try UpdateValidation.archiveNames(names, listing: listing, app: "gkdl.app")
+    rejected { try UpdateValidation.archiveNames("gkdl.app/../../escape", listing: listing, app: "gkdl.app") }
+    rejected { try UpdateValidation.archiveNames("/gkdl.app/file", listing: listing, app: "gkdl.app") }
+    rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "-rwx", with: "lrwx"), app: "gkdl.app") }
+    rejected { try UpdateValidation.archiveNames(names, listing: listing.replacingOccurrences(of: "42 bx", with: "999999999 bx"), app: "gkdl.app") }
+    // The canary app is gkdl-dev.app; neither channel takes the other's archive.
+    rejected { try UpdateValidation.archiveNames(names, listing: listing, app: "gkdl-dev.app") }
+    try UpdateValidation.archiveNames(names.replacingOccurrences(of: "gkdl.app", with: "gkdl-dev.app"),
+                                      listing: listing.replacingOccurrences(of: "gkdl.app", with: "gkdl-dev.app"), app: "gkdl-dev.app")
     var release = AppRelease(tag_name: "v1.3.0", html_url: "https://github.com/rioald/gkdl/releases/tag/v1.3.0", body: nil, draft: false, prerelease: false)
     release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://github.com/rioald/gkdl/releases/download/v1.3.0/test.zip", size: 100)]
     let assetURL = try release.assetURL(named: "test.zip", limit: 100)
@@ -706,15 +742,49 @@ func runPrereleaseTests() {
     let preview = AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: nil, draft: false, prerelease: true)
     featureCheck(!preview.isNewer(than: "1.2.0"))
     var completion: ((Data?, URLResponse?, Error?) -> Void)?
-    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", fetch: { request, done in
-        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases/latest" && request.url?.query == nil)
+    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .stable, fetch: { request, done in
+        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100")
         completion = done
     })
     checker.check()
-    completion?(try! JSONEncoder().encode(preview), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+    completion?(try! JSONEncoder().encode([preview]), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
     RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
-    featureCheck(checker.available == nil && checker.error != nil, "Prerelease responses are rejected")
-    print("PASS: stable-only endpoint and prerelease rejection")
+    featureCheck(checker.available == nil && checker.error == nil, "Prereleases are skipped")
+    print("PASS: release list endpoint and prerelease skipping")
+    runCanaryTests()
+}
+
+func runCanaryTests() {
+    func release(_ tag: String, pre: Bool = true, draft: Bool = false) -> AppRelease {
+        AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: "### 요약\n- \(tag)", draft: draft, prerelease: pre)
+    }
+    let canary = release("canary-v1.3.0")
+    featureCheck(canary.channel == .canary && canary.versionString == "1.3.0" && canary.archiveName == "gkdl-dev-1.3.0-macos-universal.zip")
+    featureCheck(canary.isNewer(than: "1.2.0") && !release("canary-v1.3.0", pre: false).isNewer(than: "1.2.0"), "Canary releases are prereleases")
+    featureCheck(release("v1.3.0", pre: false).channel == .stable && !release("v1.3.0").isNewer(than: "1.2.0") && release("pre-v1.3.0").channel == nil)
+    let suite = "io.gksdud.canary-tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    // A stable release cached under the same defaults is not an update for canary.
+    defaults.set(try! JSONEncoder().encode([release("v9.0.0", pre: false)]), forKey: "updates.releases")
+    var completion: ((Data?, URLResponse?, Error?) -> Void)?
+    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .canary, fetch: { request, done in
+        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100")
+        completion = done
+    })
+    featureCheck(checker.available == nil)
+    func respond(_ releases: [AppRelease]) {
+        checker.check(force: true)
+        completion?(try! JSONEncoder().encode(releases), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+    }
+    respond([release("v2.0.0", pre: false), release("pre-v1.9.0"), release("canary-v1.4.0", draft: true), release("canary-v1.3.0"), release("canary-v1.3.1"), release("canary-v1.2.0")])
+    featureCheck(checker.pending.map(\.tag_name) == ["canary-v1.3.1", "canary-v1.3.0"] && checker.error == nil, "Canary releases only")
+    featureCheck(AppRelease.links(checker.summary).text == "v1.3.1\n* canary-v1.3.1\n\nv1.3.0\n* canary-v1.3.0", checker.summary)
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .canary).available?.tag_name == "canary-v1.3.1")
+    respond([release("v2.0.0", pre: false)])
+    featureCheck(checker.available == nil && checker.error == nil, "No canary release yet is not an error")
+    print("PASS: canary releases, endpoint, newest canary, separate from stable")
 }
 
 func runOptionRepeatTests() {
@@ -1008,5 +1078,35 @@ func probeInputSources() throws {
     expect("separate: three times quickly goes", foreign, foreignText)
     print("PROBE RESULT: \(passed)/\(total) added input source cases")
     guard passed == total else { throw failure(7, "Added input source expectations failed.") }
+}
+
+func runUniversalControlTests() {
+    featureCheck(remoteLongPress(down: 10, tapDown: nil), "A press the tap never saw is remote")
+    featureCheck(!remoteLongPress(down: 10, tapDown: 10.05), "The tap seeing the press after the device keeps it local")
+    featureCheck(!remoteLongPress(down: 10, tapDown: 9.95), "The tap seeing the press before the device keeps it local")
+    featureCheck(remoteLongPress(down: 10, tapDown: 5), "An older tap press does not claim this one")
+    var keyboards = RemoteKeyboards(), lookups: [UInt64] = []
+    keyboards.inKernel = { lookups.append($0); return $0 < 1 << 40 }
+    let key = CGEvent(keyboardEventSource: nil, virtualKey: 64, keyDown: true)!
+    featureCheck(!keyboards.sentFromOtherMac(key) && lookups.isEmpty, "An event with no sending service is this Mac's")
+    key.setIntegerValueField(RemoteKeyboards.senderField!, value: 34407378380128265)
+    featureCheck(keyboards.sentFromOtherMac(key) && keyboards.sentFromOtherMac(key) && lookups == [34407378380128265],
+                 "A service outside the kernel is another Mac's, looked up once")
+    key.setIntegerValueField(RemoteKeyboards.senderField!, value: 4294969256)
+    featureCheck(!keyboards.sentFromOtherMac(key), "Posted events and this Mac's keyboards are local")
+    // The other Mac's key-up right after a long press here, still in the switching window, is not learned from; the next
+    // press from there sets the case straight whatever the lock here did meanwhile.
+    for upper in [false, true] {
+        var caps = EnglishCapsState()
+        caps.enable(actual: upper)
+        caps.willSwitch(english: true, actual: upper, longPress: true)
+        caps.committedLongPress(!upper)
+        caps.lockSeen(english: true, actual: upper)
+        featureCheck(caps.remembered == !upper, "A lock seen mid-switch is not remembered")
+        caps.switching = false
+        caps.followSender(upper)
+        featureCheck(caps.beforeLongPress(actual: !upper, preserving: true) == upper, "A long press toggles from the sending keyboard's lock")
+    }
+    print("PASS: Universal Control long press told from the tap's, other Mac's keys by sending service, its lock followed")
 }
 #endif

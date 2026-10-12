@@ -23,16 +23,18 @@ esac
 output_dir=${GKDL_OUTPUT_DIR:-"$PWD/outputs/$variant"}
 stage=$(mktemp -d /private/tmp/gkdl-build.XXXXXX)
 app="$stage/$app_name.app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$output_dir"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Helpers" "$app/Contents/Resources" "$output_dir"
 swiftc -parse-as-library -D ICON_GENERATOR -module-cache-path "$stage/module-cache" DudIcon.swift -o "$stage/icon-generator"
 "$stage/icon-generator" "$stage/AppIcon.iconset"
 iconutil -c icns "$stage/AppIcon.iconset" -o "$app/Contents/Resources/AppIcon.icns"
-sources=(main.swift DudIcon.swift KeyboardManagement.swift KeyboardSettings.swift SettingsWindow.swift InputSources.swift UpdateChecking.swift UpdateInstaller.swift SpecialCharacters.swift CorrectionAccessibility.swift TerminalCorrection.swift ManualCorrection.swift KeyboardTests.swift FeatureTests.swift ManualCorrectionTests.swift SelfTest.swift)
+sources=(main.swift DudIcon.swift KeyboardManagement.swift KeyboardSettings.swift SettingsWindow.swift InputSources.swift UpdateChecking.swift UpdateInstaller.swift SpecialCharacters.swift CLI.swift CLIServer.swift UniversalControl.swift CLITests.swift CorrectionAccessibility.swift TerminalCorrection.swift ManualCorrection.swift KeyboardTests.swift FeatureTests.swift ManualCorrectionTests.swift SelfTest.swift)
 compile() { swiftc -swift-version 5 -O -module-cache-path "$stage/module-cache" -import-objc-header Bridge.h "${sources[@]}" -framework AppKit -framework IOKit -framework ServiceManagement "$@"; }
 for arch in arm64 x86_64; do
   compile -target "$arch-apple-macos13.0" -o "$stage/gkdl-$arch"
+  swiftc -swift-version 5 -O -parse-as-library -module-cache-path "$stage/module-cache" CLI.swift CLITool.swift -target "$arch-apple-macos13.0" -o "$stage/cli-$arch"
 done
 lipo -create "$stage/gkdl-arm64" "$stage/gkdl-x86_64" -output "$app/Contents/MacOS/$executable"
+lipo -create "$stage/cli-arm64" "$stage/cli-x86_64" -output "$app/Contents/Helpers/gkdl"
 cp Info.plist "$app/Contents/Info.plist"
 configure_bundle() {
   local path=$1 name=$2 identifier=$3 binary=$4
@@ -52,6 +54,7 @@ if [[ -n "${GKDL_BUILD_NUMBER:-}" ]]; then
   [[ "$GKDL_BUILD_NUMBER" =~ ^[0-9]+$ ]] || exit 1
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GKDL_BUILD_NUMBER" "$app/Contents/Info.plist"
 fi
+codesign --force "${sign_args[@]}" --identifier "$bundle_id.cli" --options runtime "$app/Contents/Helpers/gkdl"
 codesign --force "${sign_args[@]}" --options runtime "$app"
 codesign --verify --deep --strict "$app"
 # Automated test modes use their own bundle/settings, including during release packaging.
@@ -62,6 +65,8 @@ configure_bundle "$test_app" 'gkdl dev tests' com.zzune.gkdl.dev.tests gkdl-dev-
 compile -D TESTS -target "$(uname -m)-apple-macos13.0" -o "$test_app/Contents/MacOS/gkdl-dev-tests"
 codesign --force "${sign_args[@]}" --options runtime "$test_app"
 "$test_app/Contents/MacOS/gkdl-dev-tests" --self-test
+"$app/Contents/Helpers/gkdl" help settings >/dev/null
+if "$app/Contents/Helpers/gkdl" set no-such=on 2>/dev/null; then exit 1; else test $? -eq 2; fi
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
 ditto -c -k --keepParent --norsrc "$app" "$output_dir/$archive_prefix-$version-macos-universal.zip"
 codesign -d -r- "$app"

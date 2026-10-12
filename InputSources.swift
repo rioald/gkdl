@@ -121,7 +121,7 @@ func addedSourceTarget(separateKey: Bool, current: InputSourceIdentity, mode: Ad
 }
 
 extension AppDelegate {
-    var addedSourcesActive: Bool { engine.active && engine.addedSourcesEnabled && engine.accessibilityTrusted() }
+    var addedSourcesActive: Bool { engine.active && !engine.paused && engine.addedSourcesEnabled && engine.accessibilityTrusted() }
     var separateKeyActive: Bool { addedSourcesActive && engine.addedSourceMode == .separate }
     // The tap takes the separate key's F-key only while the separate key is mapped to it. When another mapping already
     // sends that F-key, the separate key is not applied and its presses stay that mapping's.
@@ -174,10 +174,10 @@ extension AppDelegate {
         switchSource(to: target, from: current, pulse: pulse)
     }
     // False when there is nothing to switch with, so a Space goes back to the app.
-    func switchSeparate() -> Bool {
+    func switchSeparate(_ key: CGEvent) -> Bool {
         guard separateKeyActive, let current = logicalSource, let target = addedTarget(separateKey: true, from: current),
               let pulse = nativeSwitchPulse(keyCode: engine.target.keyCode, marker: nativePulseMarker) else { return false }
-        rememberCapsBeforeSwitch()
+        rememberCapsBeforeSwitch(key)
         switchSource(to: target, from: current, pulse: pulse)
         return true
     }
@@ -195,8 +195,11 @@ extension AppDelegate {
     }
     func plannedSwitch(to target: InputSourceIdentity, from current: InputSourceIdentity) -> SwitchPlan {
         var landed = sourceHistory; landed.note(current.id); landed.note(target.id)
-        let next = addedSourceTarget(separateKey: false, current: target, mode: engine.addedSourceMode, cycle: cycleOrder,
-                                     separate: engine.separateSource, enabled: enabledSources(), history: landed)
+        // A command can switch without added sources, when the Korean/English key goes between Korean and English as a
+        // separate key's sources do.
+        let added = addedSourcesActive
+        let next = addedSourceTarget(separateKey: false, current: target, mode: added ? engine.addedSourceMode : .separate, cycle: cycleOrder,
+                                     separate: added ? engine.separateSource : nil, enabled: enabledSources(), history: landed)
         return switchPlan(current: current, target: target, next: next?.id, previous: sourceHistory.previous(of: current.id), isLayout: isLayout)
     }
     // Only the system shortcut switches, as without added sources. Sources selected from here first only set where it goes.
@@ -272,7 +275,12 @@ extension AppDelegate {
         holdKeys = false
         let keys = heldKeys
         heldKeys = []
-        for key in keys { key.setIntegerValueField(.eventSourceUserData, value: nativePulseMarker); key.post(tap: .cghidEventTap) }
+        let caps = currentCaps
+        for key in keys {
+            // With the lock as it is now, as a key pressed now would have it.
+            key.flags = capsFlags(key.flags, caps: caps)
+            key.setIntegerValueField(.eventSourceUserData, value: nativePulseMarker); key.post(tap: .cghidEventTap)
+        }
     }
     // The recent sources macOS keeps, as far as they are known; otherwise only the current one.
     func seedSourceHistory() {
@@ -291,7 +299,7 @@ extension AppDelegate {
         sourceHistory = SourceHistory(ids.first == current ? ids : current.map { [$0] } ?? [])
     }
     func sourceIcon(_ source: InputSourceIdentity) -> NSImage {
-        isKorean(source) || isEnglish(source) ? sourceMenuIcon(korean: isKorean(source))
+        isKorean(source) || isEnglish(source) ? sourceMenuIcon(korean: isKorean(source), upper: englishCase())
             : badgeImage(label: sourceBadgeLabel(source.language, position: sourcePosition(source.id)), filled: false)
     }
     // Counted in the cycle's order, which starts as Korean, English, then the rest; a source outside it follows that
@@ -362,6 +370,8 @@ final class AddedSourcesSettings: NSObject {
     let warning = NSTextField(wrappingLabelWithString: "")
     private let cycleRows = NSStackView(), separateRows = NSStackView()
     private var labels: [NSTextField] = []
+    // English icons in the order and the add menu, which follow its case without rebuilding the section.
+    private var englishIcons: [NSImageView] = [], englishItems: [NSMenuItem] = []
     private var signature = ""
     private var error: String?
     static let rowHeight: CGFloat = 26
@@ -443,6 +453,7 @@ final class AddedSourcesSettings: NSObject {
         separateRows.isHidden = engine.addedSourceMode != .separate
         // Cycle: the saved order, with sources macOS no longer offers dimmed.
         list.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        englishIcons = []; englishItems = []
         for (index, id) in cycle.enumerated() {
             let source = enabled.first { $0.id == id }
             list.addArrangedSubview(cycleRow(id, source: source, index: index, count: cycle.count, usable: usable))
@@ -451,6 +462,7 @@ final class AddedSourcesSettings: NSObject {
         for source in enabled where !cycle.contains(source.id) {
             addPicker.addItem(withTitle: AppDelegate.sourceTitle(source.id))
             addPicker.lastItem?.representedObject = source.id; addPicker.lastItem?.image = owner.sourceIcon(source)
+            if isEnglish(source), let item = addPicker.lastItem { englishItems.append(item) }
         }
         // Separate: one key and one input source that is neither Korean nor English.
         keyPicker.removeAllItems(); keyPicker.addItem(withTitle: "선택 안 함")
@@ -485,8 +497,13 @@ final class AddedSourcesSettings: NSObject {
             : engine.keyboards.result.extraBlocked > 0 ? "\(engine.separateTarget.name)이 다른 키 매핑에서 사용 중이라 전환 키를 적용하지 못했습니다." : "")
         warning.isHidden = warning.stringValue.isEmpty
     }
+    func showEnglishIcon(_ image: NSImage) {
+        for icon in englishIcons where icon.image !== image { icon.image = image }
+        for item in englishItems where item.image !== image { item.image = image }
+    }
     private func cycleRow(_ id: String, source: InputSourceIdentity?, index: Int, count: Int, usable: Bool) -> NSView {
         let icon = NSImageView(image: source.map(owner.sourceIcon) ?? owner.badgeImage(label: sourceBadgeLabel("", position: index + 1), filled: false))
+        if source.map(isEnglish) == true { englishIcons.append(icon) }
         icon.contentTintColor = source == nil || !usable ? .disabledControlTextColor : .labelColor
         icon.widthAnchor.constraint(equalToConstant: 22).isActive = true; icon.heightAnchor.constraint(equalToConstant: 20).isActive = true
         let name = NSTextField(labelWithString: AppDelegate.sourceTitle(id))
@@ -510,12 +527,12 @@ final class AddedSourcesSettings: NSObject {
         return row
     }
     private func save(_ change: () -> Void) { change(); owner.addedSourcesChanged() }
-    @objc private func toggleCompatible() { save { engine.defaults.set(compatible.state == .on, forKey: "addedSourcesCompatibility") } }
-    @objc private func toggle() {
+    @objc func toggleCompatible() { save { engine.defaults.set(compatible.state == .on, forKey: "addedSourcesCompatibility") } }
+    @objc func toggle() {
         if enable.state == .on, engine.addedSourceMode == .separate, let key = engine.separateKey, !confirmKey(key) { refresh(force: true); return }
         save { engine.defaults.set(enable.state == .on, forKey: "addedSources") }
     }
-    @objc private func changeMode() {
+    @objc func changeMode() {
         let mode = AddedSourceMode(rawValue: modePicker.indexOfSelectedItem) ?? .cycle
         // The separate key takes a key away from the keyboard, so the same warnings as choosing it apply.
         if mode == .separate, let key = engine.separateKey, !confirmKey(key) { refresh(force: true); return }
@@ -529,8 +546,10 @@ final class AddedSourcesSettings: NSObject {
         guard let id = addPicker.selectedItem?.representedObject as? String else { return }
         edit { if !$0.contains(id) { $0.append(id) } }
     }
-    @objc private func changeSource() { save { engine.separateSource = sourcePicker.selectedItem?.representedObject as? String } }
-    @objc private func changeKey() {
+    // The whole order at once, from the command line.
+    func setCycle(_ order: [String]) { save { engine.cycleSources = order } }
+    @objc func changeSource() { save { engine.separateSource = sourcePicker.selectedItem?.representedObject as? String } }
+    @objc func changeKey() {
         let key = (keyPicker.selectedItem?.representedObject as? NSNumber)?.uint64Value
         guard let key else { save { engine.separateKey = nil }; return }
         guard !(engine.defaultSources.contains(key) || engine.keyboards.maps(key, default: engine.defaultSources)) else {

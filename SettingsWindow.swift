@@ -69,9 +69,11 @@ extension AppDelegate {
             tabs.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -5),
             tabs.heightAnchor.constraint(equalToConstant: 42)
         ])
-        func hint(_ text: String, in panel: NSStackView, indent: CGFloat = 20) {
+        // `dims`: dimmed with the settings that need Accessibility.
+        func hint(_ text: String, in panel: NSStackView, indent: CGFloat = 20, dims: Bool = true) {
             let label = NSTextField(wrappingLabelWithString: text)
-            label.font = .systemFont(ofSize: 11); label.textColor = .secondaryLabelColor; settingLabels.append((label, .secondaryLabelColor))
+            label.font = .systemFont(ofSize: 11); label.textColor = .secondaryLabelColor
+            if dims { settingLabels.append((label, .secondaryLabelColor)) }
             label.translatesAutoresizingMaskIntoConstraints = false
             let container = NSView(); container.addSubview(label)
             if let last = panel.arrangedSubviews.last { panel.setCustomSpacing(6, after: last) }
@@ -79,9 +81,10 @@ extension AppDelegate {
             NSLayoutConstraint.activate([label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: indent), label.trailingAnchor.constraint(equalTo: container.trailingAnchor), label.topAnchor.constraint(equalTo: container.topAnchor), label.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
         }
         func separator(in panel: NSStackView) { let line = NSBox(); line.boxType = .separator; full(line, in: panel) }
-        func heading(_ text: String, in panel: NSStackView) {
+        func heading(_ text: String, in panel: NSStackView, dims: Bool = true) {
             let label = NSTextField(labelWithString: text); label.font = .systemFont(ofSize: 13, weight: .semibold)
-            panel.addArrangedSubview(label); settingLabels.append((label, .labelColor))
+            panel.addArrangedSubview(label)
+            if dims { settingLabels.append((label, .labelColor)) }
         }
         func row(_ title: String, _ views: [NSView], in panel: NSStackView) {
             let label = NSTextField(labelWithString: title); label.widthAnchor.constraint(equalToConstant: 95).isActive = true
@@ -89,8 +92,21 @@ extension AppDelegate {
             let row = NSStackView(views: [label] + views); row.spacing = 16; row.alignment = .centerY
             panel.addArrangedSubview(row)
         }
-        // Fewer rows than the other tabs, so they spread out: activation, then login and the menu bar, then the keys.
-        let general = tabPanels[0]; general.spacing = 20
+        // Permission, activation and login first, without a title; then the keys and the menu bar. Fewer rows than the
+        // other tabs, so they get more room.
+        let general = tabPanels[0]; general.spacing = 18
+        func section(_ title: String) {
+            general.setCustomSpacing(28, after: general.arrangedSubviews.last!); separator(in: general)
+            general.setCustomSpacing(28, after: general.arrangedSubviews.last!); heading(title, in: general)
+        }
+        // Under 메뉴바에 표시, and only with it.
+        func indented(_ button: NSButton) {
+            button.translatesAutoresizingMaskIntoConstraints = false
+            let row = NSView(); row.addSubview(button)
+            NSLayoutConstraint.activate([button.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 20),
+                button.topAnchor.constraint(equalTo: row.topAnchor), button.bottomAnchor.constraint(equalTo: row.bottomAnchor)])
+            full(row, in: general)
+        }
         pressAccess.target = self; pressAccess.action = #selector(requestPressAccess); pressAccess.bezelStyle = .rounded
         pressAccessRequired.font = .systemFont(ofSize: 11); pressAccessRequired.textColor = .systemOrange
         let accessRow = NSStackView(views: [pressAccess, pressAccessRequired]); accessRow.spacing = 8; accessRow.alignment = .centerY
@@ -105,40 +121,36 @@ extension AppDelegate {
         let activation = NSStackView(views: [enabled, keyboardWarningRow])
         activation.orientation = .vertical; activation.alignment = .leading; activation.spacing = 6
         full(activation, in: general); keyboardWarningRow.isHidden = true
-        general.setCustomSpacing(28, after: activation)
         login.target = self; login.action = #selector(toggleLogin)
         login.state = startsAtLogin ? .on : .off
+        general.addArrangedSubview(login)
+        section("한영 키")
+        picker.show(engine.defaultSources)
+        picker.onChange = { [weak self] _ in self?.selectionChanged() }
+        let keyboards = advancedButton; keyboards.target = self; keyboards.action = #selector(showKeyboardSettings); keyboards.bezelStyle = .rounded
+        let keysRow = NSStackView(views: [picker, keyboards]); keysRow.spacing = 8; keysRow.alignment = .centerY
+        general.addArrangedSubview(keysRow)
+        section("메뉴바")
         showInMenuBar.target = self; showInMenuBar.action = #selector(toggleHidden)
         showInMenuBar.state = engine.defaults.bool(forKey: "hidden") ? .off : .on
-        general.addArrangedSubview(login); general.addArrangedSubview(showInMenuBar)
-        // Under 메뉴바에 표시, and only with it.
-        replaceInputMenu.target = self; replaceInputMenu.action = #selector(toggleReplaceInputMenu)
-        replaceInputMenu.translatesAutoresizingMaskIntoConstraints = false
-        let replaceRow = NSView(); replaceRow.addSubview(replaceInputMenu)
-        NSLayoutConstraint.activate([replaceInputMenu.leadingAnchor.constraint(equalTo: replaceRow.leadingAnchor, constant: 20),
-            replaceInputMenu.topAnchor.constraint(equalTo: replaceRow.topAnchor), replaceInputMenu.bottomAnchor.constraint(equalTo: replaceRow.bottomAnchor)])
+        general.addArrangedSubview(showInMenuBar)
         hint("⌘+드래그로 위치를 옮길 수 있어요.", in: general)
-        general.setCustomSpacing(12, after: general.arrangedSubviews.last!); full(replaceRow, in: general)
+        replaceInputMenu.target = self; replaceInputMenu.action = #selector(toggleReplaceInputMenu)
+        general.setCustomSpacing(12, after: general.arrangedSubviews.last!); indented(replaceInputMenu)
+        iconCaseSwitch.target = self; iconCaseSwitch.action = #selector(toggleIconCase)
+        iconCaseSwitch.state = engine.defaults.bool(forKey: "iconCase") ? .on : .off
+        general.setCustomSpacing(12, after: general.arrangedSubviews.last!); indented(iconCaseSwitch)
+        general.setCustomSpacing(24, after: general.arrangedSubviews.last!)
         iconPicker.addItems(withTitles: ["한 / dud", "한 / A", "KO / EN", "ㅎuㅎ / dud", "하이 / gkdl"])
         iconPicker.selectItem(at: iconStyle); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
         iconPicker.setAccessibilityLabel("메뉴바 아이콘 조합")
         for preview in [koreanPreview, englishPreview] {
-            preview.widthAnchor.constraint(equalToConstant: 32).isActive = true
+            preview.widthAnchor.constraint(equalToConstant: 38).isActive = true
             preview.heightAnchor.constraint(equalToConstant: 20).isActive = true; preview.contentTintColor = .labelColor
         }
         koreanPreview.setAccessibilityLabel("한국어 아이콘 미리보기")
         englishPreview.setAccessibilityLabel("영어 아이콘 미리보기")
-        let previews = NSStackView(views: [koreanPreview, englishPreview]); previews.spacing = 8
-        row("메뉴바 아이콘", [iconPicker, previews], in: general)
-        general.setCustomSpacing(32, after: general.arrangedSubviews.last!)
-        separator(in: general)
-        general.setCustomSpacing(32, after: general.arrangedSubviews.last!)
-        picker.show(engine.defaultSources)
-        picker.onChange = { [weak self] _ in self?.selectionChanged() }
-        row("한영 키", [picker], in: general)
-        let keyboards = advancedButton; keyboards.target = self; keyboards.action = #selector(showKeyboardSettings); keyboards.bezelStyle = .rounded
-        general.setCustomSpacing(8, after: general.arrangedSubviews.last!)
-        row("", [keyboards], in: general)
+        row("아이콘", [iconPicker, koreanPreview, englishPreview], in: general)
         // Shown in the advanced settings sheet.
         targetPicker.addItems(withTitles: targets.map(\.name)); targetPicker.selectItem(withTitle: engine.target.name)
         targetPicker.target = self; targetPicker.action = #selector(selectionChanged)
@@ -167,6 +179,15 @@ extension AppDelegate {
         heading("기타", in: extras)
         escapeSwitch.target = self; escapeSwitch.action = #selector(toggleFeature(_:))
         extras.addArrangedSubview(escapeSwitch)
+        separator(in: extras)
+        // Installing needs no Accessibility, so this section never dims.
+        heading("CLI", in: extras, dims: false)
+        installCLI.target = self; installCLI.action = #selector(toggleCLI); installCLI.bezelStyle = .rounded
+        let cliHelp = NSButton(title: "사용법", target: self, action: #selector(openCLIHelp)); cliHelp.bezelStyle = .rounded
+        let cliRow = NSStackView(views: [installCLI, cliHelp]); cliRow.spacing = 8
+        extras.addArrangedSubview(cliRow)
+        hint("터미널, Hammerspoon 등에서 gkdl 명령으로 설정을 바꿀 수 있어요.", in: extras, indent: 0, dims: false)
+        refreshCLIButton()
         let correction = tabPanels[4]
         manualCorrectionSwitch.target = self; manualCorrectionSwitch.action = #selector(toggleManualCorrection)
         correction.addArrangedSubview(manualCorrectionSwitch)
@@ -258,7 +279,18 @@ extension AppDelegate {
     }
     @objc func showAbout() { showSettings(); selectTab(tabPanels.count - 1) }
     @objc func checkForUpdates() { installer.clearStatus(); updates.check(force: true) }
-    @objc func performUpdate() { if let release = updates.available { installer.start(release) } }
+    @objc func performUpdate() {
+        guard let release = updates.available else { return }
+        // The warnings of every version the update installs, such as permissions to allow again, are read first.
+        let warnings = updates.warnings
+        if !warnings.isEmpty {
+            let alert = NSAlert(); alert.alertStyle = .warning
+            alert.messageText = "업데이트 전에 확인해주세요"; alert.accessoryView = linkedLabel(warnings, width: 222)
+            alert.addButton(withTitle: "업데이트 설치"); alert.addButton(withTitle: "취소")
+            guard runAlert(alert) == .alertFirstButtonReturn, updates.available?.tag_name == release.tag_name else { return }
+        }
+        installer.start(release)
+    }
     func installPreparedUpdate(_ prepared: PreparedUpdate) {
         do {
             guard !engine.isUpdatingSettings else { throw UpdateFailure("설정을 적용하고 있습니다. 잠시 후 다시 시도해주세요.") }
@@ -274,25 +306,42 @@ extension AppDelegate {
             repair()
         }
     }
-    @objc func openSupport() { NSWorkspace.shared.open(URL(string: "https://fairy.hada.io/@gksdud")!) }
+    // Release notes text whose links open in the browser.
+    func linkedText(_ text: String, size: CGFloat) -> NSAttributedString {
+        let (plain, links) = AppRelease.links(text)
+        // Korean wraps between words, as in labels.
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakStrategy = .standard
+        let result = NSMutableAttributedString(string: plain, attributes: [.font: NSFont.systemFont(ofSize: size), .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph])
+        for link in links { result.addAttribute(.link, value: link.url, range: link.range) }
+        return result
+    }
+    // An alert's text that can hold links, which its informative text cannot.
+    func linkedLabel(_ text: String, width: CGFloat) -> NSTextView {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 0))
+        view.isEditable = false; view.isSelectable = true; view.drawsBackground = false
+        view.textContainerInset = .zero; view.textContainer?.lineFragmentPadding = 3  // lines up with the alert's title
+        view.textStorage?.setAttributedString(linkedText(text, size: NSFont.systemFontSize))
+        view.layoutManager?.ensureLayout(for: view.textContainer!)
+        view.frame.size.height = ceil(view.layoutManager!.usedRect(for: view.textContainer!).height)
+        return view
+    }
     @objc func openUpstream() { NSWorkspace.shared.open(URL(string: "https://github.com/codingnoye/gksdud")!) }
+    @objc func openSupport() { NSWorkspace.shared.open(URL(string: "https://fairy.hada.io/@gksdud")!) }
     @objc func openProject() { NSWorkspace.shared.open(URL(string: "https://github.com/rioald/gkdl")!) }
     func refreshUpdates() {
         let release = updates.available
         tabButtons.last?.image = release == nil ? tabGlyph("?") : updateGlyph(NSSize(width: 24, height: 20), color: .controlAccentColor)
         selectTab(selectedTab)
-        tabButtons.last?.setAccessibilityLabel(release == nil ? "gkdl 탭" : "gkdl 탭, 업데이트 가능")
+        tabButtons.last?.setAccessibilityLabel(release == nil ? "\(AppIdentity.name) 탭" : "\(AppIdentity.name) 탭, 업데이트 가능")
         for entry in item?.menu?.items ?? [] where entry.action == #selector(showAbout) { entry.isHidden = release == nil }
         let latest = release.map { " → v\($0.versionString)" } ?? ""
         updateHeading.stringValue = "v\(updates.installedVersion)\(latest)"
-        updateSummary.string = release?.summary ?? ""
+        updateSummary.textStorage?.setAttributedString(linkedText(updates.summary, size: 12))
         updateScroll.isHidden = release == nil
         updateButton.isHidden = release == nil
         updateButton.isEnabled = !installer.busy
-        checkUpdateButton.isHidden = !updates.enabled
-        checkUpdateButton.isEnabled = updates.enabled && !updates.checking && !installer.busy
-        if !updates.enabled { updateStatus.stringValue = "로컬 테스트 빌드 · 새 빌드로 교체해 사용하세요." }
-        else if !installer.status.isEmpty { updateStatus.stringValue = installer.status }
+        checkUpdateButton.isEnabled = !updates.checking && !installer.busy
+        if !installer.status.isEmpty { updateStatus.stringValue = installer.status }
         else if updates.checking { updateStatus.stringValue = "업데이트 확인 중…" }
         else if let error = updates.error { updateStatus.stringValue = error }
         else if let date = updates.lastChecked {

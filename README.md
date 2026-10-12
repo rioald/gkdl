@@ -19,9 +19,10 @@
 - **한영 키 변경**: Caps Lock·오른쪽 Command·Shift + Space 등 원하는 키로 한영 전환
 - **빠른 한영 전환**: 전환 딜레이와 키 씹힘 개선
 - **대소문자 전환·보존**: 한영 키를 길게 눌러 대소문자 전환, 한영 전환 후에도 대문자 상태 유지
-- **메뉴바 스타일 선택**: 한글·영문 입력 상태 표시와 아이콘 변경
+- **메뉴바 스타일 선택**: 한글·영문 입력 상태 표시, 아이콘 변경과 Caps Lock 대소문자 표시
 - **특수문자 입력 설정**: 한글 상태에서도 Option 특수문자 입력 또는 비활성화
 - **다국어 지원 (beta)**: 중국어·일본어 등 다른 입력 소스 전환
+- **CLI 제어**: 터미널·Hammerspoon 등에서 설정 변경, 일시정지와 입력 소스 전환
 
 
 
@@ -47,10 +48,16 @@
 
 <img src="docs/screenshots/menu-bar-styles.png" width="384" alt="gkdl 메뉴바 스타일 선택: 원작의 네 가지와 하이 / gkdl, 한글·영문 아이콘 미리보기" />
 
+**대소문자를 영문 아이콘에 반영**을 켜면 Caps Lock 상태에 따라 영문 아이콘이 바뀝니다. `하이 / gkdl` 스타일에서는 `gkdl / GKDL`로 표시하며, 한글 아이콘은 그대로 유지합니다.
+
 ### 특수문자와 다국어
 
 - **특수문자** 탭: 한글 상태에서도 `Option + 문자`로 영어 입력 상태와 같은 특수문자를 입력하거나, Option 특수문자 입력을 비활성화할 수 있습니다.
 - **추가기능** 탭: 중국어·일본어 등 다른 입력 소스를 한영 키로 순회하거나, 별도 키로 전환할 수 있습니다. 다국어 지원은 beta 기능입니다.
+
+### CLI
+
+**추가기능 → CLI 설치**에서 명령을 설치하면 터미널에서 `gkdl status`, `gkdl pause`, `gkdl resume`, `gkdl source ko` 등을 사용할 수 있습니다. 일시정지 중에는 아차차를 포함한 키 처리가 멈추며, 재개하면 현재 입력 상태부터 다시 동작합니다. 자세한 명령과 설정은 [CLI 안내](docs/cli.md)를 참고하세요.
 
 ### 아차차 — 잘못 입력한 단어 바로잡기
 
@@ -96,7 +103,7 @@ gkdl은 메뉴바에서 사용하는 앱입니다. 창이 보이지 않으면 �
 
 ## 업데이트
 
-설정의 **gkdl(?)** 탭에서 업데이트를 확인하고 설치할 수 있습니다. Homebrew로 설치했다면 다음 명령도 사용할 수 있습니다.
+설정의 **gkdl(?)** 탭에서 업데이트를 확인하고 설치할 수 있습니다. 건너뛴 버전의 변경 요약을 함께 표시하며, 설치 전 확인할 경고가 있으면 안내합니다. Homebrew로 설치했다면 다음 명령도 사용할 수 있습니다.
 
 ```sh
 brew update
@@ -109,7 +116,7 @@ brew upgrade --greedy rioald/tap/gkdl
 
 ## 출처·라이선스
 
-한영 전환 기능은 [gksdud](https://github.com/codingnoye/gksdud)를 기반으로 합니다. 원작의 기능과 동작 방식은 [gksdud v1.6.0 README](https://github.com/codingnoye/gksdud/blob/54debb68ac31bb11af372d671a730c74b7be2dd4/README.md)에서 확인할 수 있습니다.
+한영 전환 기능은 [gksdud](https://github.com/codingnoye/gksdud)를 기반으로 합니다. 원작의 기능과 동작 방식은 [통합한 gksdud 원본 README](https://github.com/codingnoye/gksdud/blob/0fa3f55ffdef54dec24bf6a3156197ba30630b6d/README.md)에서 확인할 수 있습니다.
 
 gkdl · © 2026 rioald · [MIT](LICENSE)<br>
 based on [gksdud](https://github.com/codingnoye/gksdud) · © 2026 CodingNoye · [MIT](LICENSE)
