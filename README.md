@@ -2,8 +2,6 @@
   <img src="docs/gkdl-icon.png" width="96" height="96" alt="gkdl 앱 아이콘" />
 </p>
 
----
-
 <h1 align="center">gkdl · 하이</h1>
 
 [gksdud](https://github.com/codingnoye/gksdud) 에 **한영 오입력 바로잡기**를 더한 Mac 한영 전환 유틸리티입니다. 원작의 기능과 설정을 유지하며, Apple Developer ID 서명·공증을 거쳐 배포합니다.
