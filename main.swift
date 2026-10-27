@@ -19,6 +19,8 @@ struct TargetKey {
 let targets = zip(13...20, [105, 107, 113, 106, 64, 79, 80, 90]).map {
     TargetKey(name: "F\($0.0)", usage: 0x700000068 + UInt64($0.0 - 13), keyCode: $0.1)
 }
+// macOS's input source shortcuts never fire on F20, so the Korean/English key's F-key is one of the others.
+let switchTargets = targets.filter { $0.name != "F20" }
 let sources: [UInt64] = [0x7000000e7, 0x7000000e6, 0x700000039, 0x7000000e4]
 let sourceNames = ["우측 Command ⌘", "우측 Option ⌥", "Caps Lock ⇪", "우측 Control ⌃"]
 // Space combinations are caught by the event tap, not mapped in HID, so they apply to every keyboard.
@@ -49,7 +51,8 @@ func spaceCombo(flags: CGEventFlags) -> UInt64? {
 func owns(_ record: [String: String]?, _ mapping: Mapping) -> Bool {
     guard let record, let source = mapping[srcKey]?.uint64Value, let target = mapping[dstKey]?.uint64Value else { return false }
     return decodeSources(record["source"]).contains(source)
-        && [record["target"], record["pendingTarget"], record["extraTarget"], record["pendingExtraTarget"]].contains(String(target))
+        && ([record["target"], record["pendingTarget"]].contains(String(target))
+            || (extraTargets(record["extraTarget"]) + extraTargets(record["pendingExtraTarget"])).contains(target))
 }
 
 func targetConflict(_ mappings: [Mapping], sources: [UInt64], target: UInt64, owned: [String: String]?) -> Bool {
@@ -162,36 +165,89 @@ final class Engine {
     // The saved choice waits while Caps Lock is a Korean/English key, however that key was saved.
     var koreanCapsLock: Bool { defaults.bool(forKey: "koreanCapsLock") && !capsLockSwitches() }
     var escapeToEnglish: Bool { defaults.bool(forKey: "escapeToEnglish") }
-    // A Caps Lock chosen as a Korean/English key reaches macOS as the reserved F-key, never as Caps Lock; so does the separate key.
+    var swapBackquote: Bool { defaults.bool(forKey: "swapBackquote") }
+    var universalControlCompat: Bool { defaults.bool(forKey: "universalControlCompat") }
+    // A Caps Lock chosen as a Korean/English key reaches macOS as the reserved F-key, never as Caps Lock; so does a source's key.
     // `fallback` checks default keys before they are saved.
     func capsLockSwitches(_ fallback: [UInt64]? = nil) -> Bool {
-        keyboards.maps(sources[2], default: fallback ?? defaultSources) || usesSeparateKey && separateKey == sources[2]
+        keyboards.maps(sources[2], default: fallback ?? defaultSources) || usedSourceKeys.values.contains(sources[2])
     }
-    // Input sources beside Korean and English: the Korean/English key goes round them (cycle), or a key of their own
-    // switches to one (separate). Off, nothing changes.
+    // Input sources beside Korean and English: the Korean/English key goes round some of them, and a source can have a key
+    // of its own. Off, nothing changes.
     var addedSourcesEnabled: Bool { defaults.bool(forKey: "addedSources") }
-    var addedSourceMode: AddedSourceMode { AddedSourceMode(rawValue: defaults.integer(forKey: "addedSourceMode")) ?? .cycle }
-    var usesSeparateKey: Bool { addedSourcesEnabled && addedSourceMode == .separate }
     var addedSourcesCompatible: Bool { defaults.bool(forKey: "addedSourcesCompatibility") }
-    // Saved once edited; until then every input source macOS offers.
+    // Saved once edited; until then every input source macOS offers. Sources turned off keep their place.
     var cycleSources: [String]? {
         get { defaults.stringArray(forKey: "cycleSources") }
         set { defaults.set(newValue, forKey: "cycleSources") }
     }
-    var separateSource: String? {
-        get { defaults.string(forKey: "separateSource") }
-        set { defaults.set(newValue, forKey: "separateSource") }
+    // Sources this app leaves alone: out of the cycle, without their keys, and never a way back.
+    var disabledSources: Set<String> {
+        get { Set(defaults.stringArray(forKey: "disabledSources") ?? []) }
+        set { defaults.set(newValue.isEmpty ? nil : newValue.sorted(), forKey: "disabledSources") }
     }
-    var separateKey: UInt64? {
-        get { (defaults.object(forKey: "separateKey") as? NSNumber).map(\.uint64Value).flatMap { hangulKeys.contains($0) ? $0 : nil } }
-        set { defaults.set(newValue.map { NSNumber(value: $0) }, forKey: "separateKey") }
+    // A key of a source's own, at most one source per key.
+    var sourceKeys: [String: UInt64] {
+        get {
+            (defaults.dictionary(forKey: "sourceKeys") as? [String: NSNumber] ?? [:])
+                .compactMapValues { hangulKeys.contains($0.uint64Value) ? $0.uint64Value : nil }
+        }
+        set { defaults.set(newValue.isEmpty ? nil : newValue.mapValues { NSNumber(value: $0) }, forKey: "sourceKeys") }
     }
-    // The separate key's own F-key, so the tap tells it from the Korean/English key. The tap takes every press of it,
-    // so it is one no system shortcut uses on its own.
-    var separateTarget: TargetKey {
-        let order = [18, 17, 16, 20, 19, 15, 14, 13].map { targets[$0 - 13] }.filter { $0.name != target.name }
-        return order.first { !systemFKeys.contains($0.keyCode) } ?? order[0]
+    func setSourceKey(_ key: UInt64?, for id: String) {
+        let old = sourceKeys
+        var keys = old.filter { $0.key != id && $0.value != key }
+        if let key { keys[id] = key }
+        sourceKeys = keys
+        // A source that loses its key starts over on an automatic F-key when it gets one again.
+        let dropped = Set(old.keys).subtracting(keys.keys)
+        if !dropped.isEmpty { manualInternalKeys = manualInternalKeys.filter { !dropped.contains($0.key) } }
     }
+    // F-keys chosen by hand for sources' keys, by name; the others are assigned automatically.
+    var manualInternalKeys: [String: String] {
+        get { defaults.dictionary(forKey: "sourceInternalKeys") as? [String: String] ?? [:] }
+        set { defaults.set(newValue.isEmpty ? nil : newValue, forKey: "sourceInternalKeys") }
+    }
+    // nil goes back to automatic. A key chosen for another source moves here, and that one goes back to automatic.
+    func setInternalKey(_ name: String?, for id: String) {
+        var manual = manualInternalKeys.filter { $0.key != id && $0.value != name }
+        if let name { manual[id] = name }
+        manualInternalKeys = manual
+    }
+    // Pressed again in its source, a source's key goes back to the source before it. Off until chosen.
+    var sourceKeyReturns: Bool { defaults.bool(forKey: "sourceKeyReturns") }
+    // The input sources macOS offers, set by the app; nil counts every saved one. A source removed in System Settings keeps
+    // its settings for when it comes back, but its key goes back to the keyboard meanwhile.
+    var availableSources: () -> Set<String>? = { nil }
+    // The keys of the sources turned on that macOS offers.
+    var usedSourceKeys: [String: UInt64] {
+        guard addedSourcesEnabled else { return [:] }
+        let disabled = disabledSources, available = availableSources()
+        return sourceKeys.filter { !disabled.contains($0.key) && available?.contains($0.key) != false }
+    }
+    // Each single key's own F-key, so the tap tells them from the Korean/English key and each other. The tap takes every
+    // press of them, so they are ones no system shortcut uses on their own while there are enough.
+    // One chosen by hand comes first, unless it is the Korean/English key's own.
+    var sourceKeyTargets: [UInt64: TargetKey] { internalKeys().mapValues(\.target) }
+    // `ignoring` shows where a source's key would go back to automatically.
+    func internalKeys(ignoring: String? = nil) -> [UInt64: (target: TargetKey, automatic: Bool)] {
+        let used = usedSourceKeys, manual = manualInternalKeys.filter { $0.key != ignoring }
+        var result: [UInt64: (target: TargetKey, automatic: Bool)] = [:]
+        for key in sources where used.values.contains(key) {
+            guard let id = used.first(where: { $0.value == key })?.key, let name = manual[id],
+                  let chosen = targets.first(where: { $0.name == name }), chosen.name != target.name else { continue }
+            result[key] = (chosen, false)
+        }
+        let taken = Set(result.values.map(\.target.name) + [nextTarget?.name].compactMap { $0 }), foreign = keyboards.result.foreignTargets
+        let order = [18, 17, 16, 20, 19, 15, 14, 13].map { targets[$0 - 13] }.filter { $0.name != target.name && !taken.contains($0.name) }
+        // F-keys a system shortcut or another mapping uses come last.
+        let free = order.filter { !systemFKeys.contains($0.keyCode) && !foreign.contains($0.usage) }
+            + order.filter { systemFKeys.contains($0.keyCode) || foreign.contains($0.usage) }
+        for (key, target) in zip(sources.filter { used.values.contains($0) && result[$0] == nil }, free) { result[key] = (target, true) }
+        return result
+    }
+    // The F-key a source's key goes to, nil without a single key in use.
+    func internalKey(for id: String) -> (target: TargetKey, automatic: Bool)? { usedSourceKeys[id].flatMap { internalKeys()[$0] } }
     // Read when settings change, not on every key.
     private(set) var systemFKeys: Set<Int> = []
     func refreshSystemFKeys() {
@@ -200,7 +256,8 @@ final class Engine {
     // Keys of the enabled system shortcuts, except the one this app manages.
     func systemShortcutKeys() -> [(keyCode: Int, modifiers: Int)] {
         shortcutPreferences.read().compactMap { id, raw in
-            guard id != "60", let entry = raw as? [String: Any], (entry["enabled"] as? NSNumber)?.boolValue == true,
+            guard id != "60", id != "61" || !defaults.bool(forKey: "nextShortcutBackedUp"), let entry = raw as? [String: Any],
+                  (entry["enabled"] as? NSNumber)?.boolValue == true,
                   let value = entry["value"] as? [String: Any], let parameters = value["parameters"] as? [NSNumber], parameters.count == 3 else { return nil }
             return (parameters[1].intValue, parameters[2].intValue)
         }
@@ -214,27 +271,41 @@ final class Engine {
     // While the screen is locked or another user's session is in front, keyboards keep their own keys: no key press
     // reaches the tap there, so a mapped Caps Lock could not even turn uppercase off. The app sets this at launch.
     var sessionAway: () -> Bool = { false }
-    // Mapped like a Korean/English key, but only while the tap can act on it. A Space combination stays in the tap.
-    var separateMapping: ExtraKey? {
-        guard active, usesSeparateKey, separateSource != nil, let key = separateKey, sources.contains(key), accessibilityTrusted() else { return nil }
-        return ExtraKey(source: key, target: separateTarget.usage)
+    // Mapped like a Korean/English key, but only while the tap can act on them. Space combinations stay in the tap.
+    var sourceKeyMappings: [ExtraKey] {
+        guard active, accessibilityTrusted() else { return [] }
+        return sourceKeyTargets.map { ExtraKey(source: $0.key, target: $0.value.usage) }.sorted { $0.target < $1.target }
     }
-    // Whether another mapping already changes `key` on a keyboard the separate key would apply to.
-    func separateKeyConflict(_ key: UInt64) -> Bool {
-        services().filter { keyboards.isSelected($0) }.contains { service in
-            mappings(service).contains { $0[srcKey]?.uint64Value == key && $0[dstKey]?.uint64Value != separateTarget.usage && !owns(records[id(service)], $0) }
+    // Whether another mapping already changes `key` on a keyboard the sources' keys would apply to.
+    func sourceKeyConflict(_ key: UInt64) -> Bool {
+        let ours = Set(sourceKeyTargets.values.map(\.usage))
+        return services().filter { keyboards.isSelected($0) }.contains { service in
+            mappings(service).contains { $0[srcKey]?.uint64Value == key && !ours.contains($0[dstKey]?.uint64Value ?? 0) && !owns(records[id(service)], $0) }
         }
     }
-    // A key that is both stays a Korean/English key.
-    func separateKeyIsHangulKey(_ fallback: [UInt64]? = nil) -> Bool {
-        guard let key = separateKey else { return false }
-        return (fallback ?? defaultSources).contains(key) || keyboards.maps(key, default: fallback ?? defaultSources)
+    // Sources' keys that are Korean/English keys too, saved or about to be; such a key stays a Korean/English key.
+    func sourceKeysAmongHangulKeys(_ fallback: [UInt64]? = nil) -> [String: UInt64] {
+        usedSourceKeys.filter { (fallback ?? defaultSources).contains($0.value) || keyboards.maps($0.value, default: fallback ?? defaultSources) }
+    }
+    // Saved settings of the earlier cycle-or-separate choice become the same behavior here: separate kept Korean and English
+    // on the Korean/English key and gave one more source a key that goes there and back.
+    func migrateAddedSources(enabled: [InputSourceIdentity], history: SourceHistory = SourceHistory([])) {
+        guard let mode = defaults.object(forKey: "addedSourceMode") as? NSNumber else { return }
+        if mode.intValue == 1 {
+            // Separate went between the most recent Korean and English sources; another layout of either language still counts as it.
+            cycleSources = [history.mostRecent(enabled.filter(isKorean)), history.mostRecent(enabled.filter(isEnglish))].compactMap { $0?.id }
+            if let id = defaults.string(forKey: "separateSource"), let key = (defaults.object(forKey: "separateKey") as? NSNumber)?.uint64Value,
+               hangulKeys.contains(key) { setSourceKey(key, for: id) }
+            // The separate key went there and back.
+            defaults.set(true, forKey: "sourceKeyReturns")
+        }
+        for key in ["addedSourceMode", "separateSource", "separateKey"] { defaults.removeObject(forKey: key) }
     }
     var testInputText: String {
         get { defaults.string(forKey: "testInputText") ?? "하이 hi 하이 hi" }
         set { defaults.set(newValue, forKey: "testInputText") }
     }
-    var target: TargetKey { targets.first { $0.name == defaults.string(forKey: "target") } ?? targets[6] }
+    var target: TargetKey { switchTargets.first { $0.name == defaults.string(forKey: "target") } ?? targets[6] }
     var records: [String: [String: String]] {
         get { keyboards.records }
         set { keyboards.records = newValue }
@@ -283,7 +354,7 @@ final class Engine {
         settingsUpdateDepth += 1
         defer { settingsUpdateDepth -= 1 }
         var keys = shortcutPreferences.read()
-        for (id, raw) in keys where id != "60" {
+        for (id, raw) in keys where id != "60" && (id != "61" || !defaults.bool(forKey: "nextShortcutBackedUp")) {
             guard let entry = raw as? [String: Any], (entry["enabled"] as? NSNumber)?.boolValue == true,
                   let value = entry["value"] as? [String: Any], let params = value["parameters"] as? [NSNumber], params.count == 3 else { continue }
             if params[1].intValue == target.keyCode && params[2].intValue == 0 {
@@ -312,6 +383,7 @@ final class Engine {
         defaults.set(true, forKey: "active")
         let count = try reconcile()
         try updateSystemInputMenu()
+        try updateNextShortcut()
         return count
     }
     func setSystemInputMenu(_ value: CFPropertyList?) throws {
@@ -340,7 +412,13 @@ final class Engine {
         defaults.removeObject(forKey: "inputMenuBackedUp")
     }
     func reconcile() throws -> Int {
-        keyboards.reconcile(sources: defaultSources, target: target.usage, active: active, away: sessionAway() || paused, extra: separateMapping).applied
+        let away = sessionAway() || paused, extras = sourceKeyMappings
+        var result = keyboards.reconcile(sources: defaultSources, target: target.usage, active: active, away: away, extras: extras)
+        // An automatic F-key that turns out to be another mapping's moves to a free one at once.
+        if !result.blockedTargets.isEmpty, sourceKeyMappings != extras {
+            result = keyboards.reconcile(sources: defaultSources, target: target.usage, active: active, away: away, extras: sourceKeyMappings)
+        }
+        return result.applied
     }
     // Turning off is saved before anything is undone, so a later failure retries the undo instead of reapplying.
     func restore() throws {
@@ -355,6 +433,7 @@ final class Engine {
         // The shortcut must not be restored while some keys still emit our target.
         try restoreMappings()
         try restoreSystemInputMenu()
+        try restoreNextShortcut()
         try restoreShortcut()
     }
     // Applies again what restoreSystem undoes besides the mappings, which repair keeps: at launch,
@@ -363,6 +442,87 @@ final class Engine {
         guard !isUpdatingSettings, active, accessibilityTrusted() else { return }
         try shortcut(target: target)
         try updateSystemInputMenu()
+        refreshSystemFKeys()
+        try updateNextShortcut()
+    }
+    // The input menu's next-source shortcut (61), on an F-key of its own while added sources are on: a step of the cycle to
+    // the menu's next source then needs no selections before it, as a step back to the previous one does not.
+    var nextTarget: TargetKey? {
+        guard active, addedSourcesEnabled else { return nil }
+        let manual = Set(manualInternalKeys.values), foreign = keyboards.result.foreignTargets
+        // macOS takes a system shortcut on these alone; F14, F15 and F20 did not switch.
+        let free = [16, 13, 17, 18].map { targets[$0 - 13] }.filter {
+            $0.name != target.name && !manual.contains($0.name) && !systemFKeys.contains($0.keyCode) && !foreign.contains($0.usage)
+        }
+        // The one set stays while it is free, so the shortcut is not written again.
+        let managed = defaults.bool(forKey: "nextShortcutBackedUp") ? (defaults.object(forKey: "managedNextShortcutKeyCode") as? NSNumber)?.intValue : nil
+        return free.first { $0.keyCode == managed } ?? free.first
+    }
+    // Set once the shortcut is written and active, so a pulse on that F-key switches.
+    private(set) var liveNextTarget: TargetKey?
+    // The F-key whose pulse changed nothing; a new write or restore of the shortcut tries it again.
+    var nextFailedKey: String?
+    func updateNextShortcut() throws {
+        guard let next = nextTarget else { try restoreNextShortcut(); return }
+        var keys = shortcutPreferences.read()
+        let backedUp = defaults.bool(forKey: "nextShortcutBackedUp")
+        if backedUp && Self.ownsShortcut(keys["61"], keyCode: next.keyCode) {
+            // Written before but not activated.
+            if defaults.bool(forKey: "nextActivatePending") {
+                settingsUpdateDepth += 1
+                defer { settingsUpdateDepth -= 1 }
+                try shortcutPreferences.activate()
+                defaults.removeObject(forKey: "nextActivatePending")
+            }
+            defaults.set(next.keyCode, forKey: "managedNextShortcutKeyCode")
+            if liveNextTarget?.name != next.name { liveNextTarget = next }
+            followedNext = nil
+            return
+        }
+        settingsUpdateDepth += 1
+        defer { settingsUpdateDepth -= 1 }
+        let managed = (defaults.object(forKey: "managedNextShortcutKeyCode") as? NSNumber)?.intValue
+        if !backedUp || !Self.ownsShortcut(keys["61"], keyCode: managed ?? -1) {
+            defaults.set(keys["61"], forKey: "originalNextShortcut")
+            defaults.set(true, forKey: "nextShortcutBackedUp")
+        }
+        liveNextTarget = nil; nextFailedKey = nil
+        defaults.removeObject(forKey: "nextRestorePending")
+        keys["61"] = ["enabled": true, "value": ["type": "standard", "parameters": [65535, next.keyCode, 0]]] as [String: Any]
+        defaults.set(true, forKey: "nextActivatePending")
+        // Recorded once it is there: a failed write leaves the key before it, still this app's, which a backup would take as the
+        // user's. A write that fails to sync can still leave the new key.
+        do { try shortcutPreferences.write(keys) } catch {
+            if Self.ownsShortcut(shortcutPreferences.read()["61"], keyCode: next.keyCode) { defaults.set(next.keyCode, forKey: "managedNextShortcutKeyCode") }
+            throw error
+        }
+        defaults.set(next.keyCode, forKey: "managedNextShortcutKeyCode")
+        try shortcutPreferences.activate()
+        defaults.removeObject(forKey: "nextActivatePending")
+        liveNextTarget = next
+        followedNext = nil
+    }
+    // Gives the user's own next-source shortcut back, unless it was changed since.
+    func restoreNextShortcut() throws {
+        liveNextTarget = nil; nextFailedKey = nil
+        guard defaults.bool(forKey: "nextShortcutBackedUp") else { return }
+        settingsUpdateDepth += 1
+        defer { settingsUpdateDepth -= 1 }
+        var keys = shortcutPreferences.read()
+        let managed = (defaults.object(forKey: "managedNextShortcutKeyCode") as? NSNumber)?.intValue ?? -1
+        let original = defaults.object(forKey: "originalNextShortcut")
+        // Written but not activated last time.
+        let resumeActivation = defaults.bool(forKey: "nextRestorePending") && Self.sameShortcut(keys["61"], original)
+        if Self.ownsShortcut(keys["61"], keyCode: managed) {
+            keys["61"] = original
+            defaults.set(true, forKey: "nextRestorePending")
+            try shortcutPreferences.write(keys)
+            try shortcutPreferences.activate()
+        } else if resumeActivation { try shortcutPreferences.activate() }
+        for key in ["nextShortcutBackedUp", "originalNextShortcut", "managedNextShortcutKeyCode", "nextRestorePending", "nextActivatePending"] {
+            defaults.removeObject(forKey: key)
+        }
+        followedNext = nil
     }
     func restoreShortcut() throws {
         settingsUpdateDepth += 1
@@ -389,9 +549,22 @@ final class Engine {
         // Process.waitUntilExit pumps the main run loop. A timer/wake callback must not
         // restore a shortcut halfway through activation or enter a second restoration.
         guard !isUpdatingSettings else { return }
-        if active { _ = try reconcile() }
+        if active { _ = try reconcile(); if try followNextTarget() { _ = try reconcile() } }
         else { try restore() }
     }
+    // The free F-key can change as mappings are read, the first time on launch; the shortcut follows it, and the sources'
+    // automatic F-keys with it. Tried once per change, so a failing write or activation does not repeat every second; any
+    // explicit update or a wake tries again.
+    @discardableResult func followNextTarget() throws -> Bool {
+        let wanted = nextTarget?.keyCode
+        let managed = defaults.bool(forKey: "nextShortcutBackedUp") ? (defaults.object(forKey: "managedNextShortcutKeyCode") as? NSNumber)?.intValue : nil
+        let pending = defaults.bool(forKey: "nextRestorePending") || defaults.bool(forKey: "nextActivatePending")
+        guard wanted != managed || pending, followedNext != .some(wanted) else { return false }
+        followedNext = wanted
+        try updateNextShortcut()
+        return true
+    }
+    var followedNext: Int??
     func restoreMappings() throws {
         let result = keyboards.reconcile(sources: defaultSources, target: target.usage, active: false)
         // Normal repair is non-modal. Explicit quit must preserve undo state if cleanup failed.
@@ -479,7 +652,9 @@ struct EnglishCapsState {
     mutating func lockSeen(english: Bool, actual: Bool) { if english && !switching { remembered = actual } }
     // A key from another Mac carries that Mac's keyboard lock, the case it types here whatever happened to the lock here.
     mutating func followSender(_ caps: Bool) { remembered = caps }
-    func target(english: Bool) -> Bool? { english ? remembered : nil }
+    // Other sources type their own letters with the lock off, as the Korean input method turns it off on the way in;
+    // English gets its case back on the way out.
+    func target(english: Bool) -> Bool? { english ? remembered : remembered.map { _ in false } }
     func beforeLongPress(actual: Bool, preserving: Bool) -> Bool { preserving ? (remembered ?? actual) : actual }
     mutating func committedLongPress(_ desired: Bool) { remembered = desired }
 }
@@ -600,6 +775,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let updateStatus = NSTextField(wrappingLabelWithString: "")
     let updateButton = NSButton(title: "업데이트 설치", target: nil, action: nil)
     let checkUpdateButton = NSButton(title: "업데이트 확인", target: nil, action: nil)
+    let channelPicker = NSPopUpButton()
     var specialButtons: [NSButton] = []
     let specialStatus = NSTextField(wrappingLabelWithString: "")
     var item: NSStatusItem?
@@ -649,6 +825,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let showInMenuBar = NSButton(checkboxWithTitle: "메뉴바에 표시", target: nil, action: nil)
     let replaceInputMenu = NSButton(checkboxWithTitle: "Mac 입력기 아이콘 대체", target: nil, action: nil)
     let iconCaseSwitch = NSButton(checkboxWithTitle: "대소문자를 영문 아이콘에 반영", target: nil, action: nil)
+    let updateBadgeSwitch = NSButton(checkboxWithTitle: "업데이트 가능 표시", target: nil, action: nil)
+    // Whether the menu bar icon shows the update arrow.
+    var updateArrow = false
+    var showsUpdateBadge: Bool { engine.defaults.object(forKey: "updateBadge") as? Bool ?? true }
     let status = NSTextField(wrappingLabelWithString: "")
     var timer: Timer?
     var menuInputTimer: Timer?
@@ -657,13 +837,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     var keyTapSource: CFRunLoopSource?
     var pressGate = PressGate()
     var spaceGate = SpaceComboGate()
-    // The separate key's F-key.
-    var separateGate = PressGate()
+    // The F-keys of the sources' keys.
+    var sourceKeyGate = PressGate()
+    var nativeRemote = NativeRemoteGate()
     var sourceHistory = SourceHistory()
     var landingGeneration = 0
     // The source a switch is on its way to, and one that waits for it to land.
     var switchLanding: String?
     var queuedSwitch: (target: InputSourceIdentity, pulse: (CGEvent, CGEvent))?
+    // The next-source shortcut on its way, and where it went instead of the expected source, until the sources change.
+    var nextSent: (from: String, target: String, key: String)?
+    var missedNext: [String: String] = [:]
     // Keys typed while such a switch is on its way.
     var holdKeys = false
     var heldKeys: [CGEvent] = []
@@ -703,6 +887,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let preserveCapsSwitch = NSButton(checkboxWithTitle: "한영 전환시 대소문자 보존", target: nil, action: nil)
     let koreanCapsSwitch = NSButton(checkboxWithTitle: "한글 상태에서도 Caps Lock으로 대소문자 전환", target: nil, action: nil)
     let escapeSwitch = NSButton(checkboxWithTitle: "ESC 누를 시 영소문자로 변경", target: nil, action: nil)
+    let backquoteSwitch = NSButton(checkboxWithTitle: "한글 상태에서 ₩와 ` 반전", target: nil, action: nil)
+    let universalControlSwitch = NSButton(checkboxWithTitle: "유니버설 컨트롤 호환 모드", target: nil, action: nil)
+    var backquote = BackquoteSwap()
     let installCLI = NSButton(title: "CLI 설치", target: nil, action: nil)
     var commandPort: CFMessagePort?
     var commandSession: CommandSession?
@@ -734,8 +921,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if let source = keyTapSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
         if let tap = keyTap { CFMachPortInvalidate(tap) }
         releaseHeldKeys()
-        keyTapSource = nil; keyTap = nil; pressGate.held.removeAll(); spaceGate = SpaceComboGate()
-        separateGate.held.removeAll(); observedCaps = nil
+        keyTapSource = nil; keyTap = nil; pressGate.held.removeAll(); nativeRemote = NativeRemoteGate(); spaceGate = SpaceComboGate()
+        sourceKeyGate.held.removeAll(); observedCaps = nil; backquote.reset()
     }
     func ensureKeyTap() {
         defer { updateRemoteHold() }
@@ -801,17 +988,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                 let code = event.getIntegerValueField(.keyboardEventKeycode)
                 let repeated = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
                 // Keys typed before a switch with selections lands wait for it, so they reach the source it lands on.
-                if owner.holdKeys && code != Int64(owner.engine.target.keyCode) && code != Int64(owner.engine.separateTarget.keyCode)
-                    && !owner.pressGate.held.contains(code) && !owner.separateGate.held.contains(code) && owner.longPress.key != code {
+                if owner.holdKeys && code != Int64(owner.engine.target.keyCode) && owner.sourceKeyTarget(code) == nil
+                    && !owner.pressGate.held.contains(code) && !owner.sourceKeyGate.held.contains(code) && owner.longPress.key != code {
                     owner.holdKey(event)
                     return nil
                 }
-                // The separate key's F-key only switches, on press like the Korean/English key.
-                if owner.takesSeparateKey(code) {
-                    let decision = owner.separateGate.handle(code: code, down: type == .keyDown, repeatKey: repeated, active: true, target: code)
-                    if decision.switchNow { _ = owner.switchSeparate(event) }
+                owner.swapBackquote(event)
+                // A source's key's F-key only switches, on press like the Korean/English key.
+                if owner.takesSourceKey(code) {
+                    let decision = owner.sourceKeyGate.handle(code: code, down: type == .keyDown, repeatKey: repeated, active: true, target: code)
+                    if decision.switchNow, let id = owner.sourceKeyTarget(code) { _ = owner.switchToKeySource(id, key: event) }
                     return decision.consume ? nil : Unmanaged.passUnretained(event)
                 }
+                if owner.passesNatively(event, code: code, down: type == .keyDown, repeated: repeated) { return Unmanaged.passUnretained(event) }
                 if owner.engine.active && type == .keyDown && !repeated && code == Int64(owner.engine.target.keyCode) {
                     owner.tapTargetDown = ProcessInfo.processInfo.systemUptime
                     owner.rememberCapsBeforeSwitch(event)
@@ -865,6 +1054,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         replaceInputMenu.isEnabled = trusted && showInMenuBar.state == .on
         iconCaseSwitch.state = engine.defaults.bool(forKey: "iconCase") ? .on : .off
         iconCaseSwitch.isEnabled = trusted && showInMenuBar.state == .on
+        updateBadgeSwitch.state = showsUpdateBadge ? .on : .off
+        // The arrow shows without Accessibility too, so it can be turned off without it.
+        updateBadgeSwitch.isEnabled = showInMenuBar.state == .on
         for preview in [koreanPreview, englishPreview] { preview.contentTintColor = trusted ? .labelColor : .disabledControlTextColor }
         for (label, color) in settingLabels { label.textColor = trusted ? color : .disabledControlTextColor }
         let ready = keyTap.map { CGEvent.tapIsEnabled(tap: $0) } ?? false
@@ -887,6 +1079,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         escapeSwitch.state = trusted && engine.escapeToEnglish ? .on : .off
         escapeSwitch.isEnabled = trusted
         escapeSwitch.toolTip = trusted ? switchErrors[escapeSwitch] : accessibilityHint
+        backquoteSwitch.state = trusted && engine.swapBackquote ? .on : .off
+        backquoteSwitch.isEnabled = trusted
+        backquoteSwitch.toolTip = trusted ? switchErrors[backquoteSwitch] : accessibilityHint
+        universalControlSwitch.state = trusted && engine.universalControlCompat ? .on : .off
+        universalControlSwitch.isEnabled = trusted
+        universalControlSwitch.toolTip = trusted ? nil : accessibilityHint
         pressAccess.toolTip = trusted && engine.active && !ready ? "권한 반영을 기다리는 중입니다. 계속 전환되지 않으면 앱을 다시 실행하세요."
             : "키를 누르는 순간 전환하려면 접근성 권한이 필요합니다."
         manualCorrectionSwitch.state = engine.manualCorrection ? .on : .off
@@ -898,7 +1096,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     // Each checkbox saves its own preference; the tap starts or stops with them.
     @objc func toggleFeature(_ sender: NSButton) {
         let keys: [NSButton: String] = [longPressSwitch: "longPressCapsLock",
-            preserveCapsSwitch: "preserveCapsLock", koreanCapsSwitch: "koreanCapsLock", escapeSwitch: "escapeToEnglish"]
+            preserveCapsSwitch: "preserveCapsLock", koreanCapsSwitch: "koreanCapsLock", escapeSwitch: "escapeToEnglish",
+            backquoteSwitch: "swapBackquote", universalControlSwitch: "universalControlCompat"]
         guard let key = keys[sender] else { return }
         cancelLongPress()
         switchErrors[sender] = nil
@@ -909,7 +1108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if koreanCaps { releaseKoreanCaps() }
     }
     // Caps Lock in Korean works only with preservation, so it goes off with it; left on, it would still warn when Caps Lock
-    // becomes a Korean/English or separate key.
+    // becomes a Korean/English key or a source's key.
     func turnOffUnusedKoreanCaps() {
         if !engine.preserveCapsLock { engine.defaults.set(false, forKey: "koreanCapsLock") }
     }
@@ -947,11 +1146,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     // True when the Space belongs to a chosen combination and must reach neither apps nor system shortcuts.
     func handleSpaceCombo(_ event: CGEvent) -> Bool {
         guard event.getIntegerValueField(.keyboardEventKeycode) == Int64(kVK_Space) else { return false }
-        let separate = separateCombo
+        let own = sourceCombos
         let decision = spaceGate.handle(down: event.type == .keyDown,
-            repeatKey: event.getIntegerValueField(.keyboardEventAutorepeat) != 0, flags: event.flags, chosen: engine.chosenCombos + (separate.map { [$0] } ?? []))
-        if decision.switchNow, let separate, spaceCombo(flags: event.flags) == separate {
-            guard switchSeparate(event) else { spaceGate.held = false; return false }
+            repeatKey: event.getIntegerValueField(.keyboardEventAutorepeat) != 0, flags: event.flags, chosen: engine.chosenCombos + own.keys)
+        if decision.switchNow, let id = spaceCombo(flags: event.flags).flatMap({ own[$0] }) {
+            guard switchToKeySource(id, key: event) else { spaceGate.held = false; return false }
         } else if decision.switchNow {
             // Without a pulse, give the Space back instead of swallowing it.
             guard let pulse = nativeSwitchPulse(keyCode: engine.target.keyCode, marker: nativePulseMarker) else { spaceGate.held = false; return false }
@@ -972,7 +1171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     func restoreEnglishCaps() {
         // The lock screen selects U.S. for itself; restoring there would start the password in the remembered case.
         guard !optionInput.busy, capsPreservationActive, pendingCapsState == nil, !engine.sessionAway() else { return }
-        // With Caps Lock in Korean, Korean shows the English case as well; its input method turns Caps Lock off on the way in.
+        // With Caps Lock in Korean, Korean shows the English case as well; its input method turns Caps Lock off on the way in,
+        // and other sources have it turned off here.
         let source = currentSource
         guard let desired = englishCaps.target(english: source?.language.hasPrefix("en") == true || showsEnglishCase(source)),
               currentCaps != desired else { return }
@@ -1120,6 +1320,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     func postSwitchPulse(_ pulse: (CGEvent, CGEvent)) {
         noteSwitchSent()
+        // Notices from here on are this switch's, not those of a next-source shortcut sent before.
+        nextSent = nil
         // With the lock as it is now, not as when its key went down: the session takes the lock from posted events, and a
         // pulse read as off made restoring the case set the lock again mid-switch, which switched back.
         let caps = currentCaps
@@ -1135,6 +1337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func requestPressAccess() {
         returningFromPermissionSettings = true
         permissionSettingsWasActive = false
+        UpdateValidation.forgetUnusablePermissions(defaults: engine.defaults)
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         // Let the system prompt offer Settings; do not open it before the user chooses.
         _ = AXIsProcessTrustedWithOptions(options)
@@ -1151,6 +1354,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         }
         editEntry.submenu = editMenu; mainMenu.addItem(editEntry)
         NSApp.mainMenu = mainMenu
+        seedSourceHistory(); engine.migrateAddedSources(enabled: enabledSources(), history: sourceHistory)
+        engine.availableSources = { [weak self] in self.map { Set($0.enabledSources().map(\.id)) } }
         buildWindow()
         configureLoginItem()
         updateMenu()
@@ -1196,7 +1401,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.repair() }
         timer?.tolerance = 0.2
         do { try engine.resume() } catch { report(error) }
-        seedSourceHistory(); engine.refreshSystemFKeys(); turnOffUnusedKoreanCaps()
+        engine.refreshSystemFKeys(); turnOffUnusedKoreanCaps()
         repair()
         // Once launching has applied the settings, so a command right after `gkdl start` finds it ready.
         startCommandServer()
@@ -1220,9 +1425,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     }
     // The keyboard sheet saves a change before this check and undoes it on false.
     func confirmKeyboardChange(_ keyboards: Set<String>) -> Bool {
-        guard confirmCapsLockKey(engine.capsLockSwitches()), confirmSeparateKey(),
+        guard confirmCapsLockKey(engine.capsLockSwitches()), confirmSourceKeys(),
               !engine.active || confirmMapping(engine.defaultSources, target: engine.target, only: keyboards) else { return false }
-        releaseKoreanCapsLock(); releaseSeparateKey()
+        releaseKoreanCapsLock(); releaseSourceKeys()
         return true
     }
     func refreshKeyboardState() {
@@ -1252,6 +1457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             ])
             warningBadge.isHidden = engine.keyboards.warning == nil
         }
+        updateArrow = showsUpdateBadge && updates.announced != nil
         let menu = NSMenu()
         menu.delegate = self
         menu.autoenablesItems = false
@@ -1263,7 +1469,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         let updateEntry = NSMenuItem(title: "업데이트 가능", action: #selector(showAbout), keyEquivalent: "")
         updateEntry.target = self
         updateEntry.image = updateGlyph(NSSize(width: 22, height: 20))
-        updateEntry.isHidden = updates.available == nil
+        updateEntry.isHidden = updates.announced == nil
         menu.addItem(updateEntry)
         menu.addItem(NSMenuItem.separator())
         let koreanEntry = menu.addItem(withTitle: "한국어", action: #selector(selectKorean), keyEquivalent: "")
@@ -1304,8 +1510,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         engine.defaults.set(iconCaseSwitch.state == .on, forKey: "iconCase")
         updateInputIndicator()
     }
+    @objc func toggleUpdateBadge() {
+        engine.defaults.set(updateBadgeSwitch.state == .on, forKey: "updateBadge")
+        refreshUpdates()
+    }
     // Icons are kept, so the refresh every second finds the one showing and sets nothing.
     private var iconCache: [String: NSImage] = [:]
+    // The menu bar icon with the update arrow: a circle in the icon's own color at its bottom right, apart from it, with the
+    // arrow cut out of it.
+    private var arrowIcon: (base: NSImage, image: NSImage)?
+    func withUpdateArrow(_ icon: NSImage) -> NSImage {
+        if let arrowIcon, arrowIcon.base === icon { return arrowIcon.image }
+        let image = NSImage(size: icon.size, flipped: false) { rect in
+            // In a layer of its own, so cutting out reaches only the icon, not what it is drawn over.
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            NSGraphicsContext.saveGraphicsState(); context.beginTransparencyLayer(auxiliaryInfo: nil)
+            defer { context.endTransparencyLayer(); NSGraphicsContext.restoreGraphicsState() }
+            icon.draw(in: rect)
+            let radius = min(4.25, min(rect.width, rect.height) * 0.22), center = NSPoint(x: rect.maxX - radius, y: rect.minY + radius)
+            func circle(_ r: CGFloat) -> NSBezierPath { NSBezierPath(ovalIn: NSRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)) }
+            NSGraphicsContext.current?.compositingOperation = .destinationOut
+            circle(radius + 1.25).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            (icon.isTemplate ? NSColor.black : NSColor.labelColor).setFill(); circle(radius).fill()
+            let arrow = NSBezierPath(); arrow.lineWidth = 1.2; arrow.lineCapStyle = .round; arrow.lineJoinStyle = .round
+            let tip = center.y + radius * 0.55, wing = radius * 0.45
+            arrow.move(to: NSPoint(x: center.x, y: center.y - radius * 0.55)); arrow.line(to: NSPoint(x: center.x, y: tip))
+            arrow.move(to: NSPoint(x: center.x - wing, y: tip - wing)); arrow.line(to: NSPoint(x: center.x, y: tip)); arrow.line(to: NSPoint(x: center.x + wing, y: tip - wing))
+            NSGraphicsContext.current?.compositingOperation = .destinationOut
+            arrow.stroke()
+            return true
+        }
+        image.isTemplate = icon.isTemplate
+        arrowIcon = (icon, image)
+        return image
+    }
+    // Input sources' own icons by ID, nil for one without; read again when macOS's sources change.
+    var nativeIconCache: [String: NSImage?] = [:]
     func badgeImage(label: String, filled: Bool, width: CGFloat = 22, height: CGFloat = 20, fontSize: CGFloat? = nil) -> NSImage {
         let key = "\(filled)|\(label)|\(width)|\(height)|\(fontSize ?? 0)"
         if let image = iconCache[key] { return image }
@@ -1343,6 +1584,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self.manualCorrection.sourceChanged()
             let id = self.currentSource?.id
             if let id { self.sourceHistory.note(id) }
+            self.nextLanded(id)
             if id == self.switchLanding {
                 self.switchLanding = nil
                 // After this notification is handled, like a key pressed now.
@@ -1360,8 +1602,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             self.updateInputIndicator()
         }
     }
+    // A source's key maps or goes back to the keyboard as its source comes and goes.
     @objc func enabledSourcesChanged() {
-        RunLoop.main.perform(inModes: [.common]) { [weak self] in self?.sourceCache = nil; self?.addedSources.refresh(force: true) }
+        RunLoop.main.perform(inModes: [.common]) { [weak self] in
+            self?.sourceCache = nil; self?.nativeIconCache = [:]; self?.missedNext = [:]; self?.engine.nextFailedKey = nil; self?.repair(); self?.addedSources.refresh(force: true)
+        }
     }
     func updateInputIndicator() {
         // The Option-character round trip selects English for a moment; didFinish refreshes afterwards. Meanwhile the source
@@ -1383,16 +1628,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard let (source, other) = indicator else { return }
         let korean = isKorean(source), english = isEnglish(source)
         // Let the status bar resolve contrast, including its initial appearance and highlighting.
-        let badge = korean || english ? sourceMenuIcon(korean: korean, upper: upper) : badgeImage(label: other, filled: false)
+        let badge = korean || english ? sourceMenuIcon(korean: korean, upper: upper) : cachedNativeIcon(source.id) ?? badgeImage(label: other, filled: false)
         let name = korean ? "한국어" : english ? "영어" : other
         if inputBadge.image !== badge { inputBadge.image = badge; inputBadge.setAccessibilityLabel("현재 입력: \(name)") }
         if tabButtons.first?.image !== badge { tabButtons.first?.image = badge }
         guard let button = item?.button else { return }
         if item?.length != badge.size.width + 6 { item?.length = badge.size.width + 6 }
-        if button.image !== badge { button.title = ""; button.image = badge; button.imagePosition = .imageOnly }
+        let shown = updateArrow ? withUpdateArrow(badge) : badge
+        if button.image !== shown { button.title = ""; button.image = shown; button.imagePosition = .imageOnly }
         let warning = engine.keyboards.warning.map { "\n\($0)" } ?? ""
         let tip = "\(AppIdentity.name) · 현재 입력 소스: \(source.language)\(warning)"
-        let spoken = "\(AppIdentity.name), 현재 입력 \(name)\(warning)"
+        let update = updateArrow ? ", 업데이트 가능" : ""
+        let spoken = "\(AppIdentity.name), 현재 입력 \(name)\(warning)\(update)"
         if button.toolTip != tip { button.toolTip = tip }
         if button.accessibilityLabel() != spoken { button.setAccessibilityLabel(spoken) }
     }
@@ -1452,8 +1699,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
             case #selector(menuEnabled): entry.state = engine.active && !engine.paused ? .on : .off; entry.isEnabled = engine.accessibilityTrusted()
             case #selector(menuLogin): entry.state = login.state; entry.isEnabled = engine.accessibilityTrusted()
             case #selector(menuHidden): entry.state = showInMenuBar.state; entry.isEnabled = engine.accessibilityTrusted()
-            case #selector(selectKorean): entry.isEnabled = availableSource("ko") != nil
-            case #selector(selectEnglish): entry.isEnabled = availableSource("en") != nil
+            case #selector(selectKorean): entry.isEnabled = menuLanguageSource("ko") != nil
+            case #selector(selectEnglish): entry.isEnabled = menuLanguageSource("en") != nil
             default: break
             }
         }
@@ -1463,7 +1710,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         menuInputTimer?.invalidate()
         menuInputTimer = nil
     }
-    func selectLanguage(_ prefix: String) { if let source = availableSource(prefix) { rememberCapsBeforeSwitch(); _ = TISSelectInputSource(source) }; updateInputIndicator() }
+    func selectLanguage(_ prefix: String) {
+        if let source = menuLanguageSource(prefix).flatMap({ Self.sourceForID($0.id) }) { rememberCapsBeforeSwitch(); _ = TISSelectInputSource(source) }
+        updateInputIndicator()
+    }
     @objc func selectKorean() { selectLanguage("ko") }
     @objc func selectEnglish() { selectLanguage("en") }
     @objc func menuEnabled() {
@@ -1505,13 +1755,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     @objc func selectionChanged() {
         guard !engine.isUpdatingSettings else { resetSelection(); return }
         cancelLongPress()
-        guard confirmCapsLockKey(engine.capsLockSwitches(picker.selection)), confirmSeparateKey(picker.selection) else { resetSelection(); return }
+        guard confirmCapsLockKey(engine.capsLockSwitches(picker.selection)), confirmSourceKeys(picker.selection) else { resetSelection(); return }
         if enabled.state == .on { applyNow() }
         else {
             if let keys = picker.selection { engine.defaultSources = keys }
-            engine.defaults.set(targets[targetPicker.indexOfSelectedItem].name, forKey: "target")
+            engine.defaults.set(switchTargets[targetPicker.indexOfSelectedItem].name, forKey: "target")
         }
-        releaseKoreanCapsLock(); releaseSeparateKey()
+        releaseKoreanCapsLock(); releaseSourceKeys()
     }
     // False keeps the old keys.
     func confirmCapsLockKey(_ taken: Bool, as role: String = "한영 키") -> Bool {
@@ -1549,7 +1799,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         guard !engine.isUpdatingSettings else { return }
         defer { resetSelection(); refreshKeyboardState() }
         let keys = picker.selection ?? engine.defaultSources
-        let target = targets[targetPicker.indexOfSelectedItem]
+        let target = switchTargets[targetPicker.indexOfSelectedItem]
         guard confirmMapping(keys, target: target) else { resetSelection(); return }
         do { _ = try engine.apply(sources: keys, target: target); lastError = ""; stickyError = ""; repairFailed = false; ensureKeyTap(); refreshStatus() } catch { report(error); resetSelection() }
     }
@@ -1562,7 +1812,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         do { try engine.restore(); lastError = ""; stickyError = ""; repairFailed = false; refreshStatus() } catch { report(error) }
         resetSelection(); syncCapsPreservation(); updatePressAccess(); refreshKeyboardState()
     }
-    func recover() { terminalCorrection.reset(); manualCorrection.reset(); sourceCache = nil; observedCaps = nil; queuedSwitch = nil; releaseHeldKeys(); optionInput.cancel(); if capsRestoreTasks.isEmpty { englishCaps.switching = false }; cancelLongPress(); longPress = LongPressState(); pressGate.held.removeAll(); spaceGate = SpaceComboGate(); separateGate.held.removeAll(); for delay in [0.5, 2.0, 5.0] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.repair() } } }
+    func recover() { terminalCorrection.reset(); manualCorrection.reset(); sourceCache = nil; engine.nextFailedKey = nil; engine.followedNext = nil; observedCaps = nil; queuedSwitch = nil; releaseHeldKeys(); optionInput.cancel(); if capsRestoreTasks.isEmpty { englishCaps.switching = false }; cancelLongPress(); longPress = LongPressState(); pressGate.held.removeAll(); nativeRemote = NativeRemoteGate(); spaceGate = SpaceComboGate(); sourceKeyGate.held.removeAll(); for delay in [0.5, 2.0, 5.0] { DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.repair() } } }
     // The tap does not see Caps Lock on another user's login window, and leaves it alone on the lock screen. Coming back
     // with English (or Korean showing the English case) selected, the lock as left there is the English case. A restore on
     // its way finishes first: unlocking can land in Korean while its input method turns the lock off.

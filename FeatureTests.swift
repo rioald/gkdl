@@ -14,7 +14,10 @@ func featureCheck(_ condition: @autoclosure () -> Bool, _ message: String = "", 
 func runFeatureTests() {
     featureCheck(ReleaseVersion("v1.10.0")! > ReleaseVersion("1.9.9")!)
     featureCheck(ReleaseVersion("1.2")! == ReleaseVersion("1.2.0")!)
-    for invalid in ["pre-v1.3.0", "1.3.0-beta", "1..2", "1.2x", "", "1.2.99999999999999999999999"] { featureCheck(ReleaseVersion(invalid) == nil) }
+    featureCheck(ReleaseVersion("2.0.1")! < ReleaseVersion("2.0.1.0.1")! && ReleaseVersion("2.0.1.0.9")! < ReleaseVersion("2.0.1.1")!
+        && ReleaseVersion("2.0.1.1")! < ReleaseVersion("2.0.1.1.1")! && ReleaseVersion("2.0.1.1.30")! < ReleaseVersion("2.0.2")!)
+    featureCheck(["2.0.1", "2.0.1.1", "2.0.1.1.3", "2.0.1.0.3"].map { ReleaseVersion($0)!.channel } == [.stable, .prerelease, .canary, .canary])
+    for invalid in ["pre-v1.3.0", "1.3.0-beta", "1..2", "1.2x", "", "1.2.99999999999999999999999", "1.2.3.4.5.6"] { featureCheck(ReleaseVersion(invalid) == nil) }
     func release(_ body: String?, tag: String = "v1.3.0", url: String = "https://github.com/rioald/gkdl/releases/tag/v1.3.0", draft: Bool = false, pre: Bool = false) -> AppRelease {
         AppRelease(tag_name: tag, html_url: url, body: body, draft: draft, prerelease: pre)
     }
@@ -48,7 +51,7 @@ func runFeatureTests() {
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     defaults.set(try! JSONEncoder().encode(sample), forKey: "updates.release")
-    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.0").available?.tag_name == sample.tag_name,
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .stable).available?.tag_name == sample.tag_name,
                  "Existing single-release caches remain available before the first new check")
     let isolated = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", enabled: false, fetch: { _, _ in preconditionFailure("Development builds must not fetch releases") })
     isolated.check(); isolated.check(force: true)
@@ -131,6 +134,37 @@ func runEnglishSwitchTests() {
     for modifier: CGEventFlags in [.maskCommand, .maskControl, .maskAlternate, .maskShift] {
         featureCheck(!escape(.keyDown, "ko", modifier), "Modified ESC stays a shortcut")
     }
+    do {
+        let grave = Int64(kVK_ANSI_Grave), leftOption = CGEventFlags([.maskAlternate]).union(BackquoteSwap.leftOption)
+        var swap = BackquoteSwap()
+        func press(_ flags: CGEventFlags, korean: Bool = true, code: Int64 = grave, down: Bool = true, repeated: Bool = false) -> CGEventFlags {
+            var result = flags; swap.handle(code: code, down: down, repeated: repeated, flags: &result) { korean }; return result
+        }
+        featureCheck(press([]) == leftOption && press([], down: false) == leftOption && !swap.swapping, "₩ alone types ` in Korean")
+        featureCheck(press(leftOption) == [] && press(leftOption, down: false) == [], "Option+₩ types ₩ in Korean")
+        featureCheck(press([.maskAlternate, BackquoteSwap.anyOption]) == [], "Either Option key's device bit goes too")
+        featureCheck(press(.maskAlphaShift) == leftOption.union(.maskAlphaShift), "Caps Lock stays")
+        for kept: CGEventFlags in [.maskShift, .maskCommand, .maskControl, .maskSecondaryFn, [.maskShift, .maskAlternate]] {
+            featureCheck(press(kept) == kept && press(kept, down: false) == kept, "Shift and shortcuts stay")
+        }
+        featureCheck(press([], korean: false) == [] && press([], korean: false, down: false) == [], "Other input sources stay")
+        featureCheck(press([], code: Int64(kVK_ANSI_A)) == [] && press([], code: 10) == [], "Only the ₩ key")
+        _ = press([])
+        featureCheck(press([], korean: false, repeated: true) == leftOption && press([], korean: false, down: false) == leftOption,
+            "Repeats and the release follow their press")
+        _ = press([], korean: false)
+        featureCheck(press([], repeated: true) == [] && press([], down: false) == [], "Even when the source became Korean meanwhile")
+        featureCheck(press([], down: false) == [], "A release without its press stays")
+        _ = press([]); swap.reset()
+        featureCheck(press([], down: false) == [], "A stopped tap forgets the press")
+        featureCheck(BackquoteSwap.swaps(InputSourceIdentity(id: "com.apple.inputmethod.Korean.2SetKorean", language: "ko"))
+            && BackquoteSwap.swaps(InputSourceIdentity(id: "com.apple.inputmethod.Korean.390Sebulshik", language: "ko"))
+            && BackquoteSwap.swaps(InputSourceIdentity(id: "com.apple.inputmethod.Korean.HNCRomaja", language: "ko"))
+            && !BackquoteSwap.swaps(InputSourceIdentity(id: "com.apple.inputmethod.Korean.3SetKorean", language: "ko"))
+            && !BackquoteSwap.swaps(InputSourceIdentity(id: "org.youknowone.inputmethod.Gureum.han2", language: "ko"))
+            && !BackquoteSwap.swaps(InputSourceIdentity(id: "com.apple.keylayout.ABC", language: "en")) && !BackquoteSwap.swaps(nil),
+            "Apple Korean input modes with ₩ on that key only")
+    }
     for initial in [false, true] {
         for korean in [false, true] {
             var caps = EnglishCapsState()
@@ -166,7 +200,7 @@ func runEnglishSwitchTests() {
     let keyboard = TestKeyboard("english-switch-1", name: "Keyboard", serial: "english-switch")
     let engine = Engine(defaults: defaults, discover: { [keyboard] })
     _ = engine.keyboards.reconcile(sources: engine.defaultSources, target: f19, active: true)
-    featureCheck(!engine.koreanCapsLock && !engine.escapeToEnglish, "Both keys are opt-in")
+    featureCheck(!engine.koreanCapsLock && !engine.escapeToEnglish && !engine.swapBackquote, "These keys are opt-in")
     featureCheck(!engine.capsLockSwitches())
     engine.defaultSources = [sources[0], sources[2]]
     featureCheck(engine.capsLockSwitches(), "Caps Lock among default Korean/English keys")
@@ -522,7 +556,7 @@ func probeEscape() throws {
     guard AXIsProcessTrusted() else { throw failure(1, "Grant the gkdl dev tests app Accessibility permission, then launch it with open -n.") }
     // The running app's settings, read only.
     let saved = UserDefaults(suiteName: "com.zzune.gkdl")!
-    let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
+    let target = switchTargets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
     guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.zzune.gkdl").contains(where: { $0.processIdentifier != getpid() }),
           saved.object(forKey: "active") == nil || saved.bool(forKey: "active"), saved.bool(forKey: "escapeToEnglish") else {
         throw failure(2, "Run gkdl with ESC to English turned on first.")
@@ -707,6 +741,19 @@ func runUpdateInstallTests() throws {
     release.assets = [ReleaseAsset(name: "test.zip", browser_download_url: "https://evil.test/test.zip", size: 100)]
     rejected { _ = try release.assetURL(named: "test.zip", limit: 100) }
     rejected { _ = try UpdateValidation.installedRequirement(candidate) }
+    let suite = "io.gksdud.permission-reset-tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    var resets: [String] = []
+    defaults.set(["Accessibility", "PostEvent"], forKey: "permissions.reset")
+    UpdateValidation.forgetUnusablePermissions(defaults: defaults, trusted: { true }) { resets.append($0); return true }
+    featureCheck(resets.isEmpty && defaults.stringArray(forKey: "permissions.reset")?.count == 2, "A permission that applies is kept")
+    UpdateValidation.forgetUnusablePermissions(defaults: defaults, trusted: { false }) { resets.append($0); return $0 == "Accessibility" }
+    featureCheck(resets == ["Accessibility", "PostEvent"], "Asking without it removes what is left, whatever the record says")
+    featureCheck(defaults.stringArray(forKey: "permissions.reset") == ["PostEvent"], "Removed here, not again on the next launch")
+    defaults.removeObject(forKey: "permissions.reset")
+    UpdateValidation.forgetUnusablePermissions(defaults: defaults, trusted: { false }) { _ in false }
+    featureCheck(defaults.object(forKey: "permissions.reset") == nil, "Nothing to retry is recorded from here")
     // Real children: timeout must reap the process before replacement can roll back.
     for arguments in [["5"], ["-c", "trap '' TERM; exec /bin/sleep 5"]] {
         var pid: pid_t = 0
@@ -738,53 +785,103 @@ func runPrereleaseTests() {
     let suite = "io.gksdud.channel-tests.\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
-    let tag = "pre-v1.3.0"
-    let preview = AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: nil, draft: false, prerelease: true)
-    featureCheck(!preview.isNewer(than: "1.2.0"))
-    var completion: ((Data?, URLResponse?, Error?) -> Void)?
-    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .stable, fetch: { request, done in
-        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100")
-        completion = done
-    })
-    checker.check()
-    completion?(try! JSONEncoder().encode([preview]), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
-    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
-    featureCheck(checker.available == nil && checker.error == nil, "Prereleases are skipped")
-    print("PASS: release list endpoint and prerelease skipping")
-    runCanaryTests()
-}
-
-func runCanaryTests() {
     func release(_ tag: String, pre: Bool = true, draft: Bool = false) -> AppRelease {
-        AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: "### 요약\n- \(tag)", draft: draft, prerelease: pre)
+        AppRelease(tag_name: tag, html_url: "https://github.com/rioald/gkdl/releases/tag/\(tag)", body: "### 요약\n- \(tag)", draft: draft, prerelease: pre,
+                   assets: [ReleaseAsset(name: "gkdl-\(tag.drop { !$0.isNumber })-macos-universal.zip", browser_download_url: "", size: 1)])
     }
-    let canary = release("canary-v1.3.0")
-    featureCheck(canary.channel == .canary && canary.versionString == "1.3.0" && canary.archiveName == "gkdl-dev-1.3.0-macos-universal.zip")
-    featureCheck(canary.isNewer(than: "1.2.0") && !release("canary-v1.3.0", pre: false).isNewer(than: "1.2.0"), "Canary releases are prereleases")
-    featureCheck(release("v1.3.0", pre: false).channel == .stable && !release("v1.3.0").isNewer(than: "1.2.0") && release("pre-v1.3.0").channel == nil)
-    let suite = "io.gksdud.canary-tests.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite)!
-    defer { defaults.removePersistentDomain(forName: suite) }
-    // A stable release cached under the same defaults is not an update for canary.
-    defaults.set(try! JSONEncoder().encode([release("v9.0.0", pre: false)]), forKey: "updates.releases")
-    var completion: ((Data?, URLResponse?, Error?) -> Void)?
-    let checker = UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .canary, fetch: { request, done in
-        featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100")
-        completion = done
-    })
-    featureCheck(checker.available == nil)
-    func respond(_ releases: [AppRelease]) {
+    let preview = release("v1.3.0.1"), canary = release("v1.3.0.1.5")
+    featureCheck(preview.channel == .prerelease && preview.versionString == "1.3.0.1" && preview.archiveName == "gkdl-1.3.0.1-macos-universal.zip")
+    featureCheck(canary.channel == .canary && canary.versionString == "1.3.0.1.5" && canary.archiveName == "gkdl-1.3.0.1.5-macos-universal.zip", "Canary is the same app")
+    featureCheck(preview.isNewer(than: "1.2.0") && preview.isNewer(than: "1.3.0") && !preview.isNewer(than: "1.3.0.1") && canary.isNewer(than: "1.3.0.1"))
+    featureCheck(!release("v1.3.0.1", pre: false).isNewer(than: "1.2.0.1") && !release("v1.3.0.1.1", pre: false).isNewer(than: "1.2.0.1")
+        && !release("v1.3.0").isNewer(than: "1.2.0") && !release("v1.3.0.0").isNewer(than: "1.2.0.1") && !release("v1.3.0.1.0").isNewer(than: "1.2.0.1")
+        && !release("pre-v1.3.0.1").isNewer(than: "1.2.0.1") && !release("canary-v1.3.0.1.1").isNewer(than: "1.2.0.1"),
+        "Prereleases are GitHub prereleases with four fields, canary releases with five, stable releases neither; old pre- and canary- tags are not read")
+    featureCheck(release("v1.3.0.2").isNewer(than: "1.3.0.1.5") && !canary.isNewer(than: "1.3.0.2"), "A canary between the prereleases around it")
+    featureCheck(UpdateChannel.allCases.map(\.rawValue) == CLI.channelNames && [BuildKind.dev, .canary, .prerelease, .stable].map(\.displayName) == ["gkdl dev", "gkdl-CAN", "gkdl", "gkdl"]
+        && [BuildKind.dev, .canary, .prerelease, .stable].map(\.channel) == [.canary, .canary, .prerelease, .stable], "A local build counts as canary")
+    var completion: ((Data?, URLResponse?, Error?) -> Void)?, requests = 0
+    func checker(_ installed: String, _ channel: UpdateChannel? = nil) -> UpdateChecker {
+        UpdateChecker(defaults: defaults, installedVersion: installed, channel: channel, fetch: { request, done in
+            featureCheck(request.url?.path == "/repos/rioald/gkdl/releases" && request.url?.query == "per_page=100")
+            requests += 1; completion = done
+        })
+    }
+    func respond(_ checker: UpdateChecker, _ releases: [AppRelease]) {
         checker.check(force: true)
         completion?(try! JSONEncoder().encode(releases), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
     }
-    respond([release("v2.0.0", pre: false), release("pre-v1.9.0"), release("canary-v1.4.0", draft: true), release("canary-v1.3.0"), release("canary-v1.3.1"), release("canary-v1.2.0")])
-    featureCheck(checker.pending.map(\.tag_name) == ["canary-v1.3.1", "canary-v1.3.0"] && checker.error == nil, "Canary releases only")
-    featureCheck(AppRelease.links(checker.summary).text == "v1.3.1\n* canary-v1.3.1\n\nv1.3.0\n* canary-v1.3.0", checker.summary)
-    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.2.0", channel: .canary).available?.tag_name == "canary-v1.3.1")
-    respond([release("v2.0.0", pre: false)])
-    featureCheck(checker.available == nil && checker.error == nil, "No canary release yet is not an error")
-    print("PASS: canary releases, endpoint, newest canary, separate from stable")
+    let all = [release("v1.3.1", pre: false), release("v1.3.0.1.9"), release("v1.3.0.2"), release("v1.3.0.1"), release("v1.3.0", pre: false),
+               release("canary-v1.4.0"), release("v1.3.0.1.4", draft: true), release("pre-v1.2.0")]
+    let stable = checker("1.3.0", .stable)
+    respond(stable, all)
+    featureCheck(stable.pending.map(\.tag_name) == ["v1.3.1"] && stable.announced?.tag_name == "v1.3.1" && stable.error == nil, "Stable takes stable releases only")
+    let pre = checker("1.3.0.1", .prerelease)
+    featureCheck(pre.pending.map(\.tag_name) == ["v1.3.1", "v1.3.0.2"] && pre.available?.tag_name == "v1.3.1" && pre.announced?.tag_name == "v1.3.1",
+        "Prerelease takes the higher of a newer prerelease and stable release, from the releases of every channel kept")
+    respond(pre, [release("v1.3.0.2"), release("v1.3.0.1.9"), release("v1.3.0", pre: false)])
+    featureCheck(pre.available?.tag_name == "v1.3.0.2" && pre.available?.archiveName == "gkdl-1.3.0.2-macos-universal.zip" && pre.announced == nil,
+        "Then the next prerelease, which the menu bar leaves alone")
+    let fromCanary = checker("1.3.0.1.5", .prerelease)
+    respond(fromCanary, all)
+    featureCheck(fromCanary.pending.map(\.tag_name) == ["v1.3.1", "v1.3.0.2"], "A canary build moved to prerelease takes the next prerelease")
+    let canaryChecker = checker("1.3.0.1", .canary)
+    featureCheck(canaryChecker.pending.map(\.tag_name) == ["v1.3.0.1.9"] && canaryChecker.announced?.tag_name == "v1.3.0.1.9", "Canary takes canary releases only")
+    func commit(_ hash: String) -> String { "[\(hash)](https://github.com/rioald/gkdl/commit/\(hash)00000000)" }
+    var commits = release("v1.3.0.1.12")
+    commits = AppRelease(tag_name: commits.tag_name, html_url: commits.html_url, body: "### 요약\n- \(commit("abc1234")) [FEAT] 업데이트 채널 (#81)\n- \(commit("def5678")) [문서](https://example.com/x) 오타 수정\n\n### 카나리아\n설치 안내",
+                         draft: false, prerelease: true)
+    respond(canaryChecker, [commits, release("v1.3.0.1.9", pre: true), release("v1.3.1", pre: false)])
+    let shown = AppRelease.links(canaryChecker.summary)
+    featureCheck(shown.text == "abc1234 [FEAT] 업데이트 채널 (#81)\ndef5678 문서 오타 수정\nv1.3.0.1.9", "A canary shows its commits, hash and title, not its version: \(shown.text)")
+    featureCheck(shown.links.map(\.url.absoluteString) == ["https://github.com/rioald/gkdl/commit/abc123400000000", "https://github.com/rioald/gkdl/commit/def567800000000"])
+    featureCheck(release("v1.3.0.1.3", pre: true).commits == ["v1.3.0.1.3"] && AppRelease(tag_name: "v1.3.0.1.3", html_url: "", body: nil, draft: false, prerelease: true).commits == ["v1.3.0.1.3"])
+    respond(canaryChecker, [release("v1.3.1", pre: false), release("v1.3.0.2")])
+    featureCheck(canaryChecker.available == nil && canaryChecker.error == nil, "No canary release yet is not an error")
+    // A stable release installed on prerelease keeps taking prereleases; the channel chosen is kept.
+    featureCheck(checker("1.3.1").channel == BuildKind.current.channel, "The build's own channel until one is chosen")
+    pre.keepChannel()
+    featureCheck(checker("1.3.1").channel == .prerelease)
+    let chosen = checker("1.3.1")
+    requests = 0
+    var changes = 0
+    chosen.onChange = { changes += 1 }
+    chosen.select(.canary)
+    featureCheck(chosen.channel == .canary && checker("1.3.1").channel == .canary && requests == 1 && changes >= 1, "Choosing checks again")
+    chosen.select(.canary)
+    featureCheck(requests == 1, "The same channel again is nothing to do")
+    // gkdl dev never checks or installs releases, including cached newer versions.
+    defaults.set(try! JSONEncoder().encode([release("v1.3.0.1.9")]), forKey: "updates.cache")
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.3.0.1.9", channel: .canary).available == nil)
+    var devRequests = 0
+    let local = UpdateChecker(defaults: defaults, installedVersion: "1.3.0", enabled: false, channel: .canary, fetch: { _, _ in devRequests += 1 })
+    local.check(force: true)
+    featureCheck(local.available == nil && local.pending.isEmpty && !local.checking && devRequests == 0)
+    featureCheck([("dev", "2.0.1.3.7"), ("canary", "2.0.1.3.7"), (nil, "2.0.1.2"), (nil, "2.0.1"), ("other", "2.0.1"), (nil, nil)].map { BuildKind(channel: $0, version: $1) }
+        == [.dev, .canary, .prerelease, .stable, .stable, .stable], "The build from Info.plist")
+    // Prerelease and canary builds keep their channel from the first launch; stable and local builds do not.
+    for (build, kept) in [(BuildKind.prerelease, "prerelease"), (.canary, "canary"), (.stable, nil), (.dev, nil)] as [(BuildKind, String?)] {
+        defaults.removeObject(forKey: "updates.channel")
+        let launched = UpdateChecker(defaults: defaults, installedVersion: "1.3.0.1", build: build)
+        featureCheck(defaults.string(forKey: "updates.channel") == kept && launched.channel == build.channel, "\(build)")
+    }
+    defaults.set("stable", forKey: "updates.channel")
+    featureCheck(UpdateChecker(defaults: defaults, installedVersion: "1.3.0.1", build: .canary).channel == .stable, "What was chosen stays")
+    // An older app's cache, of its channel only, shows until the check it brings forward.
+    let migrated = UserDefaults(suiteName: suite + ".old")!
+    defer { migrated.removePersistentDomain(forName: suite + ".old") }
+    let checked = Date(timeIntervalSince1970: 500_000)
+    migrated.set(try! JSONEncoder().encode([release("v1.3.1", pre: false)]), forKey: "updates.releases")
+    migrated.set(checked.addingTimeInterval(80_000), forKey: "updates.nextCheck")
+    let old = UpdateChecker(defaults: migrated, installedVersion: "1.3.0", channel: .stable, now: { checked }, fetch: { _, done in requests += 1; completion = done })
+    featureCheck(old.available?.tag_name == "v1.3.1")
+    requests = 0; old.check()
+    featureCheck(requests == 1, "Checked at once after the update")
+    completion?(try! JSONEncoder().encode(all), HTTPURLResponse(url: URL(string: "https://api.github.com")!, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.01))
+    featureCheck(migrated.data(forKey: "updates.releases") == nil && migrated.data(forKey: "updates.cache") != nil && old.releases.contains { $0.channel == .canary })
+    print("PASS: release list endpoint, the channel's releases, prerelease taking stable releases, what the menu bar shows, the chosen channel kept")
 }
 
 func runOptionRepeatTests() {
@@ -873,29 +970,42 @@ func runAddedSourceTests() {
     let enabled = [abc, ko, ja, zh]
     func cycle(_ current: InputSourceIdentity, _ order: [String] = ["ko2", "abc", "ja"], enabled: [InputSourceIdentity] = enabled,
                history: SourceHistory = SourceHistory()) -> String? {
-        addedSourceTarget(separateKey: false, current: current, mode: .cycle, cycle: order, separate: nil, enabled: enabled, history: history)?.id
+        cycleTarget(current: current, cycle: order, enabled: enabled, history: history)?.id
     }
-    featureCheck(cycle(ko) == "abc" && cycle(abc) == "ja" && cycle(ja) == "ko2", "The Korean/English key goes round the list and back")
+    featureCheck(cycle(ko) == "abc" && cycle(abc) == "ja" && cycle(ja) == "ko2", "The Korean/English key goes round the cycle and back")
     featureCheck(cycle(ko3, enabled: enabled + [ko3]) == "abc", "Another Korean layout takes Korean's place")
+    featureCheck(cycle(ko3, ["ko2", "ko3", "abc"], enabled: enabled + [ko3]) == "abc" && cycle(ko, ["ko2", "ko3", "abc"], enabled: enabled + [ko3]) == "ko3",
+        "Korean sources in the cycle go by their own IDs")
     var history = SourceHistory()
     for id in ["abc", "ja", "zh"] { history.note(id) }
-    featureCheck(cycle(zh, history: history) == "ja", "From outside the list it resumes at the most recent entry")
+    featureCheck(cycle(zh, history: history) == "ja", "From outside the cycle it resumes at the most recent entry")
     featureCheck(cycle(zh) == "ko2", "or at the first one without history")
-    featureCheck(cycle(ko, ["ko2", "gone", "abc"]) == "abc", "Sources macOS no longer offers are skipped")
-    featureCheck(cycle(ko, ["ko2", "gone"]) == nil, "Fewer than two leaves the system shortcut alone")
-    featureCheck(addedSourceTarget(separateKey: true, current: ko, mode: .cycle, cycle: ["ko2", "abc"], separate: "zh", enabled: enabled, history: history) == nil)
-    func separate(_ current: InputSourceIdentity, key: Bool, source: String? = "zh", enabled: [InputSourceIdentity] = enabled + [us],
-                  history: SourceHistory = SourceHistory()) -> String? {
-        addedSourceTarget(separateKey: key, current: current, mode: .separate, cycle: [], separate: source, enabled: enabled, history: history)?.id
-    }
+    featureCheck(cycle(ko, ["ko2", "gone", "abc"]) == "abc" && cycle(ko, enabled: [ko, ja, zh]) == "ja", "Sources gone or turned off are skipped")
+    featureCheck(cycle(ko, ["ko2", "gone"]) == nil && cycle(ko, []) == nil, "Fewer than two leaves the system shortcut alone")
+    let bare = InputSourceIdentity(id: "bare", language: ""), plain = InputSourceIdentity(id: "plain", language: "")
+    featureCheck(cycle(bare, ["ko2", "plain", "abc"], enabled: enabled + [bare, plain], history: history) == "abc"
+        && cycle(plain, ["ko2", "plain", "abc"], enabled: enabled + [bare, plain]) == "abc",
+        "Sources that name no language are not taken for each other")
     var recent = SourceHistory()
     for id in ["abc", "ko2", "us", "zh"] { recent.note(id) }
-    featureCheck(separate(ko, key: false, history: recent) == "us" && separate(abc, key: false, history: recent) == "ko2",
-        "The Korean/English key goes between the most recent Korean and English")
-    featureCheck(separate(zh, key: false, history: recent) == "us", "and from the added source back to the most recent of them")
-    featureCheck(separate(ko, key: true) == "zh" && separate(abc, key: true) == "zh" && separate(ja, key: true) == "zh", "The separate key goes to its source")
-    featureCheck(separate(zh, key: true, history: recent) == "us", "and back to the most recent Korean or English")
-    featureCheck(separate(ko, key: true, source: "gone") == nil && separate(ko, key: true, source: nil) == nil, "A source that is gone does nothing")
+    func key(_ id: String, _ current: InputSourceIdentity, returns: Bool = true, history: SourceHistory = SourceHistory()) -> String? {
+        keySourceTarget(id, current: current, returns: returns, enabled: enabled + [us], history: history)?.id
+    }
+    featureCheck(key("zh", ko) == "zh" && key("zh", abc) == "zh" && key("zh", ja) == "zh", "A source's key goes to its source")
+    featureCheck(key("ko2", abc) == "ko2" && key("abc", ko) == "abc", "Korean and English sources have keys too")
+    featureCheck(key("zh", zh, history: recent) == "us" && key("ko2", ko, history: recent) == "zh", "Pressed there again, back to the source before it")
+    featureCheck(key("zh", zh, returns: false, history: recent) == nil, "or nothing with that off")
+    featureCheck(key("gone", ko) == nil, "A source that is gone or turned off does nothing")
+    func toggle(_ current: InputSourceIdentity) -> String? { languageToggleTarget(current: current, enabled: enabled + [us], history: recent)?.id }
+    featureCheck(toggle(ko) == "us" && toggle(abc) == "ko2" && toggle(zh) == "us", "Without added sources Korean and English go back and forth")
+    featureCheck(movedCycle(["a", "off", "b", "c"], visible: ["a", "b", "c"], moving: "c", to: 0) == ["c", "off", "a", "b"],
+        "Dragged to the top; a source turned off keeps its place")
+    featureCheck(movedCycle(["a", "b", "c"], visible: ["a", "b", "c"], moving: "a", to: 3) == ["b", "c", "a"]
+        && movedCycle(["a", "b", "c"], visible: ["a", "b", "c"], moving: "a", to: 1) == ["a", "b", "c"]
+        && movedCycle(["a", "b", "c"], visible: ["a", "b", "c"], moving: "x", to: 0) == ["a", "b", "c"], "Dropped below itself, or not a member")
+    featureCheck(sourceDisplayTitle("두벌식", provider: "구름 입력기") == "두벌식 · 구름 입력기"
+        && sourceDisplayTitle("ABC", provider: nil) == "ABC" && sourceDisplayTitle("ABC", provider: "")  == "ABC"
+        && sourceDisplayTitle("Gureum Han2", provider: "gureum") == "Gureum Han2", "An input method's name follows its mode's, once")
     var capped = SourceHistory()
     for index in 0..<20 { capped.note("s\(index)") }
     capped.note("s19"); capped.note("s18")
@@ -950,20 +1060,50 @@ func runAddedSourceTests() {
                                     ["KeyboardLayout Name": "ABC – AZERTY"], ["KeyboardLayout Name": "Removed"], ["KeyboardLayout Name": "U.S."]]
     featureCheck(systemHistory(entries, sources: infos) == ["com.apple.inputmethod.Korean.2SetKorean", "com.apple.keylayout.US",
         "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", "com.apple.keylayout.ABC-AZERTY"], "Entries map to sources until one does not")
-    print("PASS: added input sources: cycle order, other layouts, outside the list, missing sources, separate key and back, history, badges, switch plans, landing, notifications, system history")
+    // The earlier cycle-or-separate choice: separate kept Korean and English on the Korean/English key, and its source's key.
+    let migrateSuite = "io.gksdud.added-migrate-tests.\(UUID().uuidString)", migrateDefaults = UserDefaults(suiteName: migrateSuite)!
+    defer { migrateDefaults.removePersistentDomain(forName: migrateSuite) }
+    let migrating = Engine(defaults: migrateDefaults, discover: { [] })
+    migrating.accessibilityTrusted = { true }
+    featureCheck(!migrating.sourceKeyReturns, "Going back with a source's key is off until chosen")
+    migrateDefaults.set(1, forKey: "addedSourceMode"); migrateDefaults.set("zh", forKey: "separateSource")
+    migrateDefaults.set(NSNumber(value: spaceCombos[2]), forKey: "separateKey")
+    migrating.migrateAddedSources(enabled: enabled + [us], history: SourceHistory(["zh", "us", "ko2"]))
+    featureCheck(migrating.cycleSources == ["ko2", "us"] && migrating.sourceKeys == ["zh": spaceCombos[2]] && migrating.sourceKeyReturns
+        && ["addedSourceMode", "separateSource", "separateKey"].allSatisfy { migrateDefaults.object(forKey: $0) == nil }, "Separate becomes a cycle of the most recent Korean and English, and a key")
+    migrateDefaults.removeObject(forKey: "sourceKeyReturns")
+    migrateDefaults.set(0, forKey: "addedSourceMode"); migrateDefaults.set("ja", forKey: "separateSource")
+    migrating.migrateAddedSources(enabled: enabled)
+    featureCheck(migrating.cycleSources == ["ko2", "us"] && migrating.sourceKeys == ["zh": spaceCombos[2]]
+        && migrateDefaults.object(forKey: "separateSource") == nil && !migrating.sourceKeyReturns,
+        "Cycling keeps its cycle and drops the unused separate settings; going back stays off")
+    migrating.migrateAddedSources(enabled: [])
+    featureCheck(migrating.cycleSources == ["ko2", "us"], "Once only")
+    migrating.setSourceKey(spaceCombos[2], for: "ja")
+    featureCheck(migrating.sourceKeys == ["ja": spaceCombos[2]], "One source per key")
+    migrating.setSourceKey(sources[1], for: "ja"); migrating.setSourceKey(sources[3], for: "abc")
+    featureCheck(migrating.sourceKeys == ["ja": sources[1], "abc": sources[3]] && migrating.usedSourceKeys.isEmpty, "Unused while added sources are off")
+    migrateDefaults.set(true, forKey: "addedSources"); migrating.disabledSources = ["abc"]
+    featureCheck(migrating.usedSourceKeys == ["ja": sources[1]] && migrating.sourceKeyTargets.mapValues(\.name) == [sources[1]: "F18"],
+        "A source turned off leaves its key unused")
+    migrating.disabledSources = []
+    featureCheck(migrating.sourceKeyTargets.mapValues(\.name) == [sources[1]: "F18", sources[3]: "F17"] && migrating.sourceKeyMappings.count == 2,
+        "Each single key on an F-key of its own")
+    print("PASS: added input sources: cycle order, other layouts, exact IDs, outside the cycle, missing and turned-off sources, sources' keys and back, history, badges, switch plans, landing, notifications, system history, earlier settings")
 }
 // Drives the running gksdud with its switch keys, then reads the input source and what this probe's text view receives.
 // Grant the separate test app from build.sh its own Accessibility permission:
 // open -n -W --stdout <file> <test app> --args --probe-input-sources
-// Needs Korean, English and one more input source. It turns added sources on in the running app's settings, which this
-// probe shares, and puts them back afterwards. Letters go only to this probe; switch keys go only while it is frontmost.
+// Needs Korean, English and one more input source. It turns added sources, long press and case preservation on in the
+// running app's settings, which this probe shares, and puts them back afterwards. Letters go only to this probe; switch keys
+// go only while it is frontmost.
 func probeInputSources() throws {
     func failure(_ code: Int, _ message: String) -> NSError { NSError(domain: "probe", code: code, userInfo: [NSLocalizedDescriptionKey: message]) }
     let app = NSApplication.shared
     app.setActivationPolicy(.regular); app.finishLaunching()
     guard AXIsProcessTrusted() else { throw failure(1, "Grant the gkdl dev tests app Accessibility permission, then launch it with open -n.") }
     let saved = UserDefaults(suiteName: "com.zzune.gkdl")!
-    let target = targets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
+    let target = switchTargets.first { $0.name == saved.string(forKey: "target") } ?? targets[6]
     guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.zzune.gkdl").contains(where: { $0.processIdentifier != getpid() }),
           saved.object(forKey: "active") == nil || saved.bool(forKey: "active") else { throw failure(2, "Run gkdl with activation on first.") }
     let suite = "io.gksdud.sources-probe.\(UUID().uuidString)"
@@ -972,10 +1112,11 @@ func probeInputSources() throws {
     let enabled = delegate.enabledSources()
     guard let ko = enabled.first(where: isKorean), let en = enabled.first(where: isEnglish),
           let foreign = enabled.first(where: { !isKorean($0) && !isEnglish($0) }),
-          let korean = AppDelegate.sourceForID(ko.id), let english = AppDelegate.sourceForID(en.id) else {
+          let korean = AppDelegate.sourceForID(ko.id), let english = AppDelegate.sourceForID(en.id),
+          let other = AppDelegate.sourceForID(foreign.id) else {
         defaults.removePersistentDomain(forName: suite); throw failure(3, "Korean, English and one more input source are required.")
     }
-    let keys = ["addedSources", "addedSourceMode", "cycleSources", "separateSource", "separateKey"]
+    let keys = ["addedSources", "cycleSources", "sourceKeys", "disabledSources", "sourceKeyReturns", "longPressCapsLock", "preserveCapsLock"]
     let backup = keys.map { saved.object(forKey: $0) }
     let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 140), styleMask: [.titled], backing: .buffered, defer: false)
     panel.title = "gkdl 입력 소스 추가 실험"
@@ -989,13 +1130,16 @@ func probeInputSources() throws {
             if let event = app.nextEvent(matching: .any, until: Date(timeIntervalSinceNow: 0.005), inMode: .default, dequeue: true) { app.sendEvent(event) }
         }
     }
+    let savedCaps = CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift)
     defer {
         for (key, value) in zip(keys, backup) { saved.set(value, forKey: key) }
+        try? setCapsLock(savedCaps)
         text.inputContext?.discardMarkedText(); _ = TISSelectInputSource(savedSource); pump(0.3)
         panel.orderOut(nil); previousApp?.activate(options: [])
         defaults.removePersistentDomain(forName: suite)
     }
-    panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(text); app.activate(ignoringOtherApps: true); pump(0.5)
+    // Right after this app launches, a switch after the sources are reordered can miss it, so it waits a little.
+    panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(text); app.activate(ignoringOtherApps: true); pump(5)
     func frontmost() -> Bool { panel.isKeyWindow && NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid() }
     func focus() throws {
         guard !frontmost() else { return }
@@ -1019,22 +1163,33 @@ func probeInputSources() throws {
         for code in codes { for down in [true, false] { CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: down)!.postToPid(getpid()) }; pump(0.06) }
         pump(0.2)
     }
+    // Held past the long press.
+    func hold(_ code: Int) throws {
+        try focus()
+        CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: true)!.post(tap: .cghidEventTap); pump(0.8)
+        CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: false)!.post(tap: .cghidEventTap); pump(0.6)
+    }
     // This app's own selection reaches its input, unlike one from the background.
     func start(_ source: TISInputSource) throws {
         try focus(); text.inputContext?.discardMarkedText(); text.string = ""
         _ = TISSelectInputSource(source == english ? korean : english); pump(0.3)
         _ = TISSelectInputSource(source); pump(0.5)
     }
+    var caps: Bool { CGEventSource.flagsState(.combinedSessionState).contains(.maskAlphaShift) }
     var passed = 0, total = 0
     func expect(_ name: String, _ source: InputSourceIdentity, _ typed: (String) -> Bool) {
         let current = delegate.currentSource?.id ?? "", ok = current == source.id && typed(text.string)
         total += 1; if ok { passed += 1 }
         print("PROBE \(ok ? "PASS" : "FAIL"): \(name), expected=\(source.id), actual=\(current) text=\(text.string.debugDescription)")
     }
-    // Typing in the added source gives neither plain letters nor Hangul.
-    func foreignText(_ text: String) -> Bool { !text.hasSuffix("ka") && !text.unicodeScalars.contains { (0x3131...0xD7A3).contains($0.value) } }
+    // Typing in the added source gives neither plain letters nor Hangul; pinyin's letters are still being composed.
+    func foreignText(_ typed: String) -> Bool {
+        (!typed.hasSuffix("ka") || text.hasMarkedText()) && !typed.unicodeScalars.contains { (0x3131...0xD7A3).contains($0.value) }
+    }
     let (g, k, a) = (kVK_ANSI_G, kVK_ANSI_K, kVK_ANSI_A), space = kVK_Space
-    saved.set(true, forKey: "addedSources"); saved.set(AddedSourceMode.cycle.rawValue, forKey: "addedSourceMode")
+    saved.set(true, forKey: "addedSources"); saved.set(false, forKey: "longPressCapsLock"); saved.set(false, forKey: "preserveCapsLock")
+    for key in ["sourceKeys", "disabledSources"] { saved.removeObject(forKey: key) }
+    saved.set(true, forKey: "sourceKeyReturns")
     saved.set([ko.id, en.id, foreign.id], forKey: "cycleSources"); pump(1.2)
     try start(korean); try type([g])
     try press(target.keyCode); try type([k, a])
@@ -1047,19 +1202,19 @@ func probeInputSources() throws {
     try type([g]); try press(target.keyCode); try type([k, a])
     // The next syllable takes ㅎ as its final consonant, and it still goes along.
     expect("cycle: second round, Korean composing -> English", en) { $0 == "핳ka" }
-    saved.set(AddedSourceMode.separate.rawValue, forKey: "addedSourceMode"); saved.set(foreign.id, forKey: "separateSource")
-    saved.set(NSNumber(value: spaceCombos[2]), forKey: "separateKey"); pump(1.2)
+    // Korean and English on the Korean/English key, and the other source on a key of its own.
+    saved.set([ko.id, en.id], forKey: "cycleSources"); saved.set([foreign.id: NSNumber(value: spaceCombos[2])], forKey: "sourceKeys"); pump(1.2)
     try start(korean)
     try press(space, .maskAlternate); try type([k, a])
-    expect("separate: Korean -> \(foreign.id)", foreign, foreignText)
+    expect("key: Korean -> \(foreign.id)", foreign, foreignText)
     text.inputContext?.discardMarkedText(); text.string = ""
     try press(space, .maskAlternate); try type([g, k])
-    expect("separate: back to Korean", ko) { $0 == "하" }
+    expect("key: back to Korean", ko) { $0 == "하" }
     // The way back set English up as the shortcut's previous source, so Korean's syllable in progress goes along.
     text.string = ""; try type([g]); try press(target.keyCode); try type([k, a])
-    expect("separate: Korean composing -> English after it", en) { $0 == "ㅎka" }
+    expect("key: Korean composing -> English after it", en) { $0 == "ㅎka" }
     text.string = ""; try press(space, .maskAlternate); try press(space, .maskAlternate); try type([k, a])
-    expect("separate: there and back to English", en) { $0 == "ka" }
+    expect("key: there and back to English", en) { $0 == "ka" }
     // Pressed again before each switch lands: twice comes back, three times goes.
     func quick(_ times: Int) throws {
         try focus()
@@ -1073,9 +1228,39 @@ func probeInputSources() throws {
         pump(0.8)
     }
     try start(korean); try quick(2); try type([g, k])
-    expect("separate: twice quickly comes back", ko) { $0 == "하" }
+    expect("key: twice quickly comes back", ko) { $0 == "하" }
     text.string = ""; try quick(3); try type([k, a])
-    expect("separate: three times quickly goes", foreign, foreignText)
+    expect("key: three times quickly goes", foreign, foreignText)
+    saved.set(false, forKey: "sourceKeyReturns"); pump(0.3)
+    text.inputContext?.discardMarkedText(); text.string = ""; try press(space, .maskAlternate); try type([k, a])
+    expect("key: pressed again with going back off stays", foreign, foreignText)
+    saved.set(true, forKey: "sourceKeyReturns")
+    // A Korean source's key goes there from anywhere, and back.
+    saved.set([ko.id: NSNumber(value: spaceCombos[2])], forKey: "sourceKeys"); saved.set([en.id, foreign.id], forKey: "cycleSources"); pump(1.2)
+    try start(english); try press(space, .maskAlternate); try type([g, k])
+    expect("Korean's key: English -> Korean", ko) { $0 == "하" }
+    text.string = ""; try press(target.keyCode); try type([k, a])
+    expect("Korean outside the cycle: back to it at English", en) { $0 == "ka" }
+    text.string = ""; try press(target.keyCode); try press(space, .maskAlternate); try type([g, k])
+    expect("Korean's key: \(foreign.id) -> Korean", ko) { $0 == "하" }
+    // Long press ends in English upper- or lowercase from any source, and case preservation keeps English's case past others.
+    saved.set([ko.id, en.id, foreign.id], forKey: "cycleSources"); saved.removeObject(forKey: "sourceKeys")
+    saved.set(true, forKey: "longPressCapsLock"); saved.set(true, forKey: "preserveCapsLock"); pump(1.2)
+    try? setCapsLock(false); pump(0.2)
+    try start(other); text.string = ""; try hold(target.keyCode); try type([k, a])
+    expect("long press: \(foreign.id) -> English", en) { $0 == (caps ? "KA" : "ka") }
+    // From English the press goes round and the hold comes back.
+    if !caps { text.string = ""; try hold(target.keyCode); try type([k, a]) }
+    expect("long press: English uppercase", en) { $0 == "KA" && caps }
+    text.string = ""; try press(target.keyCode); try type([k, a])
+    expect("preserved: English uppercase -> \(foreign.id) types its own", foreign) { foreignText($0) && !caps }
+    text.inputContext?.discardMarkedText(); text.string = ""; try press(target.keyCode); try type([g, k])
+    expect("preserved: -> Korean", ko) { $0 == "하" && !caps }
+    text.string = ""; try press(target.keyCode); try type([k, a])
+    expect("preserved: back in English uppercase", en) { $0 == "KA" && caps }
+    // Into Korean with the Korean/English key, as typing would.
+    text.string = ""; try press(target.keyCode); try press(target.keyCode); try hold(target.keyCode); try type([k, a])
+    expect("long press: Korean -> English lowercase", en) { $0 == "ka" && !caps }
     print("PROBE RESULT: \(passed)/\(total) added input source cases")
     guard passed == total else { throw failure(7, "Added input source expectations failed.") }
 }
@@ -1094,6 +1279,48 @@ func runUniversalControlTests() {
                  "A service outside the kernel is another Mac's, looked up once")
     key.setIntegerValueField(RemoteKeyboards.senderField!, value: 4294969256)
     featureCheck(!keyboards.sentFromOtherMac(key), "Posted events and this Mac's keyboards are local")
+    featureCheck(HIDKeyboardDevice.local(4294969256, kernel: [4294969256]) && !HIDKeyboardDevice.local(34407378380128265, kernel: [4294969256])
+                 && !HIDKeyboardDevice.local(nil, kernel: []), "Another Mac's keyboards are not listed for mapping")
+    featureCheck(HIDKeyboardDevice.local(34407378380128265, kernel: nil), "Without the kernel's list, every keyboard stays")
+    // Compatibility mode: decided at the press, so repeats and the release follow it; a long hold does not switch.
+    var gate = NativeRemoteGate(), asked = 0
+    func ask(_ answer: Bool) -> () -> Bool { { asked += 1; return answer } }
+    featureCheck(gate.handle(code: 80, down: true, repeatKey: false, now: 1, claims: ask(false)) == (false, false)
+                 && gate.handle(code: 80, down: true, repeatKey: true, now: 1.1, claims: ask(true)) == (false, false)
+                 && gate.handle(code: 80, down: false, repeatKey: false, now: 1.2, claims: ask(true)) == (false, false) && asked == 1,
+                 "An unclaimed press keeps its repeats and release")
+    featureCheck(gate.handle(code: 80, down: true, repeatKey: false, now: 2, claims: ask(true)) == (true, false)
+                 && gate.handle(code: 80, down: true, repeatKey: true, now: 2.1, claims: ask(false)) == (true, false)
+                 && gate.handle(code: 80, down: false, repeatKey: false, now: 2.2, claims: ask(false)) == (true, true) && asked == 2,
+                 "A claimed press passes with its repeats and release, which switches")
+    _ = gate.handle(code: 80, down: true, repeatKey: false, now: 3, claims: ask(true))
+    featureCheck(gate.handle(code: 80, down: false, repeatKey: false, now: 3.5, claims: ask(true)) == (true, false), "A long hold does not switch")
+    _ = gate.handle(code: 80, down: true, repeatKey: false, now: 4, claims: ask(true))
+    featureCheck(gate.handle(code: 80, down: true, repeatKey: false, now: 5, claims: ask(false)) == (false, false) && gate.held.isEmpty,
+                 "A new press after a missed release decides again")
+    let suite = "io.gksdud.universal-control-tests.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    defaults.set(true, forKey: "escapeToEnglish")
+    let engine = Engine(defaults: defaults, discover: { [] })
+    let delegate = AppDelegate(engine: engine)
+    delegate.remoteKeyboards.inKernel = { $0 < 1 << 40 }
+    let code = Int64(engine.target.keyCode)
+    let remote = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(code), keyDown: true)!
+    remote.setIntegerValueField(RemoteKeyboards.senderField!, value: 34407378380128265)
+    let local = remote.copy()!; local.setIntegerValueField(RemoteKeyboards.senderField!, value: 4294969256)
+    featureCheck(!delegate.passesNatively(remote, code: code, down: true, repeated: false), "Off by default")
+    defaults.set(true, forKey: "universalControlCompat")
+    featureCheck(!delegate.passesNatively(local, code: code, down: true, repeated: false), "This Mac's keys keep the press switch")
+    featureCheck(!delegate.passesNatively(remote, code: 0, down: true, repeated: false), "Other keys from there are left alone")
+    engine.paused = true
+    featureCheck(!delegate.passesNatively(remote, code: code, down: true, repeated: false), "Paused, nothing is claimed")
+    engine.paused = false
+    featureCheck(delegate.passesNatively(remote, code: code, down: true, repeated: false) && delegate.sentSwitch == nil,
+                 "The other Mac's press goes on as it came, not switching yet")
+    defaults.set(false, forKey: "universalControlCompat")
+    featureCheck(delegate.passesNatively(remote, code: code, down: false, repeated: false) && delegate.sentSwitch != nil,
+                 "Its release follows even after turning it off, and ESC hears of the switch")
     // The other Mac's key-up right after a long press here, still in the switching window, is not learned from; the next
     // press from there sets the case straight whatever the lock here did meanwhile.
     for upper in [false, true] {
@@ -1107,6 +1334,6 @@ func runUniversalControlTests() {
         caps.followSender(upper)
         featureCheck(caps.beforeLongPress(actual: !upper, preserving: true) == upper, "A long press toggles from the sending keyboard's lock")
     }
-    print("PASS: Universal Control long press told from the tap's, other Mac's keys by sending service, its lock followed")
+    print("PASS: Universal Control long press told from the tap's, other Mac's keys by sending service, its lock followed, compatibility mode")
 }
 #endif

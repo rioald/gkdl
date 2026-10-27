@@ -140,6 +140,9 @@ extension AppDelegate {
         iconCaseSwitch.target = self; iconCaseSwitch.action = #selector(toggleIconCase)
         iconCaseSwitch.state = engine.defaults.bool(forKey: "iconCase") ? .on : .off
         general.setCustomSpacing(12, after: general.arrangedSubviews.last!); indented(iconCaseSwitch)
+        updateBadgeSwitch.target = self; updateBadgeSwitch.action = #selector(toggleUpdateBadge)
+        updateBadgeSwitch.state = showsUpdateBadge ? .on : .off
+        general.setCustomSpacing(12, after: general.arrangedSubviews.last!); indented(updateBadgeSwitch)
         general.setCustomSpacing(24, after: general.arrangedSubviews.last!)
         iconPicker.addItems(withTitles: ["한 / dud", "한 / A", "KO / EN", "ㅎuㅎ / dud", "하이 / gkdl"])
         iconPicker.selectItem(at: iconStyle); iconPicker.target = self; iconPicker.action = #selector(changeIconStyle)
@@ -152,7 +155,7 @@ extension AppDelegate {
         englishPreview.setAccessibilityLabel("영어 아이콘 미리보기")
         row("아이콘", [iconPicker, koreanPreview, englishPreview], in: general)
         // Shown in the advanced settings sheet.
-        targetPicker.addItems(withTitles: targets.map(\.name)); targetPicker.selectItem(withTitle: engine.target.name)
+        targetPicker.addItems(withTitles: switchTargets.map(\.name)); targetPicker.selectItem(withTitle: engine.target.name)
         targetPicker.target = self; targetPicker.action = #selector(selectionChanged)
         let caps = tabPanels[1]
         heading("대소문자", in: caps)
@@ -170,15 +173,21 @@ extension AppDelegate {
             button.tag = index + 1; specialButtons.append(button); symbols.addArrangedSubview(button)
             hint(index == 0 ? "한글 상태에서도 ⌥8 → • 처럼 입력합니다." : "⌥+문자를 일반 문자로 입력합니다.", in: symbols)
         }
+        backquoteSwitch.target = self; backquoteSwitch.action = #selector(toggleFeature(_:))
+        symbols.addArrangedSubview(backquoteSwitch)
+        hint("한글 상태에서도 영어처럼 ₩ 대신 `를 입력하고, ⌥+₩로 ₩를 입력합니다.", in: symbols)
         specialStatus.font = .systemFont(ofSize: 11); specialStatus.textColor = .secondaryLabelColor
         full(specialStatus, in: symbols)
         let extras = tabPanels[3]
-        heading("입력 소스 추가 (beta)", in: extras)
+        heading("입력 소스 관리", in: extras)
         addedSources.install(in: extras)
         separator(in: extras)
         heading("기타", in: extras)
         escapeSwitch.target = self; escapeSwitch.action = #selector(toggleFeature(_:))
         extras.addArrangedSubview(escapeSwitch)
+        universalControlSwitch.target = self; universalControlSwitch.action = #selector(toggleFeature(_:))
+        extras.addArrangedSubview(universalControlSwitch)
+        hint("유니버설 컨트롤로 사용시 전환이 잘 안된다면, 원격 기기에서 켜 주세요.", in: extras)
         separator(in: extras)
         // Installing needs no Accessibility, so this section never dims.
         heading("CLI", in: extras, dims: false)
@@ -224,7 +233,10 @@ extension AppDelegate {
         updateScroll.documentView = updateSummary; full(updateScroll, in: about)
         updateButton.target = self; updateButton.action = #selector(performUpdate); updateButton.bezelStyle = .rounded
         checkUpdateButton.target = self; checkUpdateButton.action = #selector(checkForUpdates); checkUpdateButton.bezelStyle = .rounded
-        let actions = NSStackView(views: [updateButton, checkUpdateButton]); actions.spacing = 10; about.addArrangedSubview(actions)
+        channelPicker.addItems(withTitles: UpdateChannel.allCases.map(\.title))
+        channelPicker.target = self; channelPicker.action = #selector(changeUpdateChannel)
+        channelPicker.setAccessibilityLabel("업데이트 채널")
+        let actions = NSStackView(views: [updateButton, checkUpdateButton, channelPicker]); actions.spacing = 10; about.addArrangedSubview(actions)
         updateStatus.font = .systemFont(ofSize: 11); updateStatus.textColor = .secondaryLabelColor; updateStatus.alignment = .center
         about.setCustomSpacing(8, after: actions); full(updateStatus, in: about)
         about.setCustomSpacing(28, after: updateStatus)
@@ -279,6 +291,10 @@ extension AppDelegate {
     }
     @objc func showAbout() { showSettings(); selectTab(tabPanels.count - 1) }
     @objc func checkForUpdates() { installer.clearStatus(); updates.check(force: true) }
+    @objc func changeUpdateChannel() {
+        guard UpdateChannel.allCases.indices.contains(channelPicker.indexOfSelectedItem) else { return }
+        installer.clearStatus(); updates.select(UpdateChannel.allCases[channelPicker.indexOfSelectedItem])
+    }
     @objc func performUpdate() {
         guard let release = updates.available else { return }
         // The warnings of every version the update installs, such as permissions to allow again, are read first.
@@ -333,7 +349,11 @@ extension AppDelegate {
         tabButtons.last?.image = release == nil ? tabGlyph("?") : updateGlyph(NSSize(width: 24, height: 20), color: .controlAccentColor)
         selectTab(selectedTab)
         tabButtons.last?.setAccessibilityLabel(release == nil ? "\(AppIdentity.name) 탭" : "\(AppIdentity.name) 탭, 업데이트 가능")
-        for entry in item?.menu?.items ?? [] where entry.action == #selector(showAbout) { entry.isHidden = release == nil }
+        for entry in item?.menu?.items ?? [] where entry.action == #selector(showAbout) { entry.isHidden = updates.announced == nil }
+        let arrow = showsUpdateBadge && updates.announced != nil
+        if updateArrow != arrow { updateArrow = arrow; showIndicator() }
+        channelPicker.selectItem(at: UpdateChannel.allCases.firstIndex(of: updates.channel) ?? 0)
+        channelPicker.isEnabled = !installer.busy
         let latest = release.map { " → v\($0.versionString)" } ?? ""
         updateHeading.stringValue = "v\(updates.installedVersion)\(latest)"
         updateSummary.textStorage?.setAttributedString(linkedText(updates.summary, size: 12))

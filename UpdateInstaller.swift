@@ -100,6 +100,20 @@ enum UpdateValidation {
               let requirement else { throw UpdateFailure("현재 앱의 서명 정보를 읽지 못했습니다.") }
         return requirement
     }
+    // Reset unusable access only when the user requests permission. Valid gkdl permissions stay intact.
+    static func forgetUnusablePermissions(defaults: UserDefaults, trusted: () -> Bool = { AXIsProcessTrusted() },
+                                          reset: (String) -> Bool = resetPermission) {
+        guard !trusted() else { return }
+        let failed = ["Accessibility", "PostEvent"].filter { !reset($0) }
+        if let left = defaults.stringArray(forKey: "permissions.reset") { defaults.set(left.filter(failed.contains), forKey: "permissions.reset") }
+    }
+    static func resetPermission(_ service: String) -> Bool {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return false }
+        return (0..<3).contains { attempt in
+            if attempt > 0 { Thread.sleep(forTimeInterval: 0.3) }
+            return (try? command("/usr/bin/tccutil", ["reset", service, bundleIdentifier])) != nil
+        }
+    }
     static func candidate(_ new: URL, installed: URL, version: String) throws {
         let requirement = try installedRequirement(installed)
         let code = try signedCode(new)
