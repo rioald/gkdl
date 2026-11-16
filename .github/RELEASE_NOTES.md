@@ -2,6 +2,8 @@
 
 - [944858c](https://github.com/rioald/gkdl/commit/944858ccdfc5c1a33bedf2528ac69280d6a638f1) Araso 자동 언어 판별 베타와 카나리아 배포 추가
 
+- [651c334](https://github.com/rioald/gkdl/commit/651c3343f3466884f5ed4436db421ffcf689a917) DMG에서도 베타 입력기의 서명 검증을 유지하도록 내부 번들 경로 수정
+
 ## 경고
 
 - 자동 언어 판별은 기본으로 꺼져 있으며, Beta 탭에서 전용 입력기를 선택한 동안에만 동작합니다.
