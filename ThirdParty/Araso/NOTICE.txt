@@ -1,0 +1,22 @@
+Araso components in gkdl / Hi Beta
+================================
+Upstream: https://github.com/nyttastudio/araso
+Revision: 97e0075d2a4a10fbca8f9a25fb38f0f0d2a11719 (retrieved 2026-11-16)
+Copyright (c) 2026 aimdevlee. Code: MIT (full license follows).
+
+The selected ArasoCore Swift source files and five data files are copied unchanged.
+UPSTREAM.json records their original paths and SHA-256 hashes. Hi provides its own
+InputMethodKit host and transient composition adapter. The adapter supports Korean
+two-set / English decisions and mixed words, with no personal dictionary, learning,
+network conversion or input history storage. Japanese model data and converters are
+not included; Japanese helper types remain solely to preserve upstream source files.
+
+Data licenses are independent of the MIT code license:
+- english_words.txt and english_acronyms.txt: SCOWL; full copyright follows.
+- korean_words.txt and korean_syllables.txt: Tatoeba contributors, CC BY 2.0 FR.
+- korean_vocabulary.txt: Hermit Dave / FrequencyWords, CC BY-SA 4.0.
+  This file remains distributed under CC BY-SA 4.0, unchanged from Araso.
+Source attribution, preprocessing details and license links follow below.
+
+The English spelling model reads the system's /usr/share/dict/words at runtime.
+This system file is not redistributed. If absent, Araso uses the bundled SCOWL list.

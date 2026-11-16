@@ -1,0 +1,82 @@
+{
+  "repository": "https://github.com/nyttastudio/araso",
+  "commit": "97e0075d2a4a10fbca8f9a25fb38f0f0d2a11719",
+  "files": {
+    "Sources/DecisionEngine.swift": {
+      "upstream": "Sources/ArasoCore/DecisionEngine.swift",
+      "sha256": "3b329a18ddf23139c0b278db5010e3f34574de885debde7789091cb1b41e955c"
+    },
+    "Sources/EnglishModel.swift": {
+      "upstream": "Sources/ArasoCore/EnglishModel.swift",
+      "sha256": "b9a165cf4443cb41c486339227f531fa253aebcb8bda44e5802a5b7384fdadde"
+    },
+    "Sources/HangulComposer.swift": {
+      "upstream": "Sources/ArasoCore/HangulComposer.swift",
+      "sha256": "7e8ddf16b92df0dc14dcf90baa86c41b9763817f9412545d8cf11a2490e9ab71"
+    },
+    "Sources/Jamo.swift": {
+      "upstream": "Sources/ArasoCore/Jamo.swift",
+      "sha256": "b5f3a90c3c7b51f2e9dbecd9ca34392d10f017a3667425a9fe572926deb1b937"
+    },
+    "Sources/JapaneseModel.swift": {
+      "upstream": "Sources/ArasoCore/JapaneseModel.swift",
+      "sha256": "f7d5dedd13ba6e4c6a9e601761fe1f6ccded3b30b8b7f733db88d8f74a72da36"
+    },
+    "Sources/JapaneseSegmenter.swift": {
+      "upstream": "Sources/ArasoCore/JapaneseSegmenter.swift",
+      "sha256": "f34296fc89018ea482b01e1e8d9e0ca7851921a9be0c6494dc25ffc3d9f85172"
+    },
+    "Sources/KoreanModel.swift": {
+      "upstream": "Sources/ArasoCore/KoreanModel.swift",
+      "sha256": "47855400ec71399ff48530bb23d02a2c6338b08d2bedb6eefaace11ce52502df"
+    },
+    "Sources/KoreanSyllables.swift": {
+      "upstream": "Sources/ArasoCore/KoreanSyllables.swift",
+      "sha256": "f4062ed38c7080341bef9f7a8c7dd8bf94ece21bdd7f53efc9be4f40b8174d21"
+    },
+    "Sources/LatinLayout.swift": {
+      "upstream": "Sources/ArasoCore/LatinLayout.swift",
+      "sha256": "0c1c2bb30de2fb132151a1a530c9712eba7dfb53a8ce0105d54d511d795b4d98"
+    },
+    "Sources/MixedWord.swift": {
+      "upstream": "Sources/ArasoCore/MixedWord.swift",
+      "sha256": "1491dce0aa38d203cfcf3145f263f26442ce8dd68878735f5bfbb1f6b5fbdb5e"
+    },
+    "Sources/ParticleSplitter.swift": {
+      "upstream": "Sources/ArasoCore/ParticleSplitter.swift",
+      "sha256": "d1b506eee02df614519af131143cf546ca004b3f2a39ed645d93b5da85b20624"
+    },
+    "Sources/Resources.swift": {
+      "upstream": "Sources/ArasoCore/Resources.swift",
+      "sha256": "3b265beb4cb39b872fbc278643a912684ab0a267a8d8f2c57c1c7d5777bf83bc"
+    },
+    "Sources/RomajiComposer.swift": {
+      "upstream": "Sources/ArasoCore/RomajiComposer.swift",
+      "sha256": "350f5a31ded71fe68ceddcf50f12dbc6cb0e67f7dabcd042c4e2b32635367c00"
+    },
+    "Sources/Sebeolsik.swift": {
+      "upstream": "Sources/ArasoCore/Sebeolsik.swift",
+      "sha256": "a01cdd4b9731886c0fe51f464645a897299767fa2d4b6398bd413b279f8e99e6"
+    },
+    "Data/english_words.txt": {
+      "upstream": "Sources/ArasoCore/Data/english_words.txt",
+      "sha256": "73cded4c79da7817c65bc845859862671aa0c9f17f55440a0cfac5bbfbc44c40"
+    },
+    "Data/english_acronyms.txt": {
+      "upstream": "Sources/ArasoCore/Data/english_acronyms.txt",
+      "sha256": "15e1a29823d0f1574264a509324c0a4e0c2c60f1f0cb3d87bcc904e3943e04f1"
+    },
+    "Data/korean_words.txt": {
+      "upstream": "Sources/ArasoCore/Data/korean_words.txt",
+      "sha256": "558d273fe48103f31acdc5342c4fe22244e8ef0f4a1c706be3e7f8ce802ec6ef"
+    },
+    "Data/korean_syllables.txt": {
+      "upstream": "Sources/ArasoCore/Data/korean_syllables.txt",
+      "sha256": "33010d8adf17703c9ff22ac6e2373fc2efded588141b2775ce48946d725e3e9e"
+    },
+    "Data/korean_vocabulary.txt": {
+      "upstream": "Sources/ArasoCore/Data/korean_vocabulary.txt",
+      "sha256": "1324ec9cd7ec7e7031217c2e2e8e68b53cf3013678c1dd72951372db7d29fc76"
+    }
+  }
+}

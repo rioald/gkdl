@@ -4,9 +4,15 @@ cd "$(dirname "$0")"
 variant=${GKDL_BUILD_VARIANT:-dev}
 case "$variant" in
   dev) app_name='gkdl dev'; executable=gkdl-dev; bundle_id=com.zzune.gkdl.dev; archive_prefix=gkdl-dev ;;
-  release) app_name=gkdl; executable=gkdl; bundle_id=com.zzune.gkdl; archive_prefix=gkdl ;;
-  *) echo 'GKDL_BUILD_VARIANT must be dev or release' >&2; exit 1 ;;
+  beta) app_name='하이 Beta'; executable=gkdl-beta; bundle_id=com.zzune.gkdl.beta; archive_prefix=gkdl-beta ;;
+  canary|release) app_name=gkdl; executable=gkdl; bundle_id=com.zzune.gkdl; archive_prefix=gkdl ;;
+  *) echo 'GKDL_BUILD_VARIANT must be dev, beta, canary or release' >&2; exit 1 ;;
 esac
+version=${GKDL_APP_VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)}
+channel=$(ruby -r ./scripts/release-metadata.rb -e 'puts ReleaseMetadata.new(ARGV.fetch(0)).channel' "$version")
+if [[ "$variant" == canary && "$channel" != canary || "$variant" == release && "$channel" == canary ]]; then
+  echo '카나리아 버전은 GKDL_BUILD_VARIANT=canary로 빌드해주세요.' >&2; exit 1
+fi
 mode=${GKDL_SIGN_MODE:-ad-hoc}
 sign_args=()
 case "$mode" in
@@ -28,7 +34,12 @@ swiftc -parse-as-library -D ICON_GENERATOR -module-cache-path "$stage/module-cac
 "$stage/icon-generator" "$stage/AppIcon.iconset"
 iconutil -c icns "$stage/AppIcon.iconset" -o "$app/Contents/Resources/AppIcon.icns"
 sources=(main.swift DudIcon.swift KeyboardManagement.swift KeyboardSettings.swift SettingsWindow.swift InputSources.swift UpdateChecking.swift UpdateInstaller.swift SpecialCharacters.swift CLI.swift CLIServer.swift UniversalControl.swift CLITests.swift CorrectionAccessibility.swift TerminalCorrection.swift ManualCorrection.swift KeyboardTests.swift FeatureTests.swift ManualCorrectionTests.swift SelfTest.swift)
-compile() { swiftc -swift-version 5 -O -module-cache-path "$stage/module-cache" -import-objc-header Bridge.h "${sources[@]}" -framework AppKit -framework IOKit -framework ServiceManagement "$@"; }
+variant_flags=()
+if [[ "$variant" == beta || "$variant" == canary ]]; then
+  sources+=(ArasoBetaIntegration.swift)
+  variant_flags=(-D ARASO_BETA)
+fi
+compile() { swiftc -swift-version 5 -O "${variant_flags[@]}" -module-cache-path "$stage/module-cache" -import-objc-header Bridge.h "${sources[@]}" -framework AppKit -framework IOKit -framework ServiceManagement "$@"; }
 for arch in arm64 x86_64; do
   compile -target "$arch-apple-macos13.0" -o "$stage/gkdl-$arch"
   swiftc -swift-version 5 -O -parse-as-library -module-cache-path "$stage/module-cache" CLI.swift CLITool.swift -target "$arch-apple-macos13.0" -o "$stage/cli-$arch"
@@ -44,10 +55,12 @@ configure_bundle() {
   /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $binary" "$path/Contents/Info.plist"
 }
 configure_bundle "$app" "$app_name" "$bundle_id" "$executable"
+if [[ "$variant" == canary ]]; then
+  /usr/libexec/PlistBuddy -c 'Add :GKDLChannel string canary' "$app/Contents/Info.plist"
+fi
 cp LICENSE "$app/Contents/Resources/LICENSE"
 cp Resources/github.svg Resources/fairy.svg Resources/OCTICONS-LICENSE "$app/Contents/Resources/"
 if [[ -n "${GKDL_APP_VERSION:-}" ]]; then
-  [[ "$GKDL_APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
   /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $GKDL_APP_VERSION" "$app/Contents/Info.plist"
 fi
 if [[ -n "${GKDL_BUILD_NUMBER:-}" ]]; then
@@ -55,6 +68,10 @@ if [[ -n "${GKDL_BUILD_NUMBER:-}" ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GKDL_BUILD_NUMBER" "$app/Contents/Info.plist"
 fi
 codesign --force "${sign_args[@]}" --identifier "$bundle_id.cli" --options runtime "$app/Contents/Helpers/gkdl"
+if [[ "$variant" == beta || "$variant" == canary ]]; then
+  bash scripts/build-araso-beta.sh "$stage" "$app"
+  codesign --force "${sign_args[@]}" --options runtime "$app/Contents/PlugIns/하이 Beta 입력기.app"
+fi
 codesign --force "${sign_args[@]}" --options runtime "$app"
 codesign --verify --deep --strict "$app"
 # Automated test modes use their own bundle/settings, including during release packaging.

@@ -4,20 +4,27 @@ class ReleaseMetadata
   attr_reader :version, :tag
 
   def initialize(version, tag = "v#{version}")
-    raise ArgumentError, 'Expected numeric release version' unless version.match?(/\A(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)\z/)
-    unless ["v#{version}", "pre-v#{version}"].include?(tag)
-      raise ArgumentError, 'Tag must be vVERSION or pre-vVERSION and match the release version'
+    raise ArgumentError, 'Expected 3 to 5 numeric version fields' unless version.match?(/\A(0|[1-9]\d*)(\.(0|[1-9]\d*)){2,4}\z/)
+    if version.split('.').length > 3 && version.split('.').last == '0'
+      raise ArgumentError, 'Prerelease and canary sequence numbers start at 1'
+    end
+    unless tag == "v#{version}"
+      raise ArgumentError, 'Tag must be vVERSION and match the release version'
     end
     @version = version
     @tag = tag
   end
 
   def prerelease?
-    tag.start_with?('pre-v')
+    channel != 'stable'
+  end
+
+  def channel
+    { 3 => 'stable', 4 => 'prerelease', 5 => 'canary' }.fetch(version.split('.').length)
   end
 
   def asset_version
-    prerelease? ? "#{version}-pre" : version
+    version
   end
 
   def filename
@@ -29,7 +36,7 @@ class ReleaseMetadata
   end
 
   def outputs
-    { version: version, tag: tag, prerelease: prerelease?,
+    { version: version, tag: tag, channel: channel, prerelease: prerelease?,
       asset_version: asset_version, filename: filename, dmg_filename: dmg_filename }
   end
 end

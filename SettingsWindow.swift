@@ -20,8 +20,14 @@ extension AppDelegate {
         inputBadge.widthAnchor.constraint(equalToConstant: 36).isActive = true
         inputBadge.heightAnchor.constraint(equalToConstant: 34).isActive = true
         testInput.stringValue = engine.testInputText; testInput.delegate = self
+        #if ARASO_BETA
+        testInput.stringValue = ""
+        #endif
         testInput.font = .monospacedSystemFont(ofSize: 21, weight: .medium)
         testInput.placeholderString = "한영 전환을 테스트해보세요"
+        #if ARASO_BETA
+        testInput.placeholderString = "dkssud · githubdp · PDFvkdlf"
+        #endif
         testInput.setAccessibilityLabel("한영 전환 테스트 입력창")
         testInput.cell?.isScrollable = true; testInput.cell?.wraps = false
         testInput.usesSingleLineMode = true; testInput.lineBreakMode = .byClipping
@@ -32,20 +38,25 @@ extension AppDelegate {
         full(inputRow, in: root)
         testInput.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -48).isActive = true
         let host = NSView(); full(host, in: root)
-        for _ in 0..<6 {
+        var titles = ["일반", "대소문자", "특수문자", "추가기능", "아차차", "gkdl"]
+        var glyphs = ["", "Aa", "⌥", "+", "aㅁ", "?"]
+        #if ARASO_BETA
+        titles.insert("Beta", at: 5); glyphs.insert("β", at: 5)
+        #endif
+        for _ in titles {
             let panel = column(); host.addSubview(panel)
             NSLayoutConstraint.activate([panel.leadingAnchor.constraint(equalTo: host.leadingAnchor), panel.trailingAnchor.constraint(equalTo: host.trailingAnchor), panel.bottomAnchor.constraint(lessThanOrEqualTo: host.bottomAnchor),
-                tabPanels.count == 5 ? panel.centerYAnchor.constraint(equalTo: host.centerYAnchor) : panel.topAnchor.constraint(equalTo: host.topAnchor)])
+                tabPanels.count == titles.count - 1 ? panel.centerYAnchor.constraint(equalTo: host.centerYAnchor) : panel.topAnchor.constraint(equalTo: host.topAnchor)])
             tabPanels.append(panel)
         }
         let tabs = NSStackView(); tabs.distribution = .fillEqually; tabs.spacing = 8
         tabs.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(tabs)
-        for (index, title) in ["일반", "대소문자", "특수문자", "추가기능", "아차차", "gkdl"].enumerated() {
+        for (index, title) in titles.enumerated() {
             let button = NSButton(title: title, target: self, action: #selector(changeTab(_:)))
             button.tag = index; button.setButtonType(.toggle); button.bezelStyle = .regularSquare
             button.isBordered = false; button.imagePosition = .imageAbove; button.imageScaling = .scaleProportionallyDown
             button.font = .systemFont(ofSize: 10)
-            button.image = index == 0 ? sourceMenuIcon(korean: true) : tabGlyph(["", "Aa", "⌥", "+", "aㅁ", "?"][index], fontSize: index == 4 ? 14 : 16)
+            button.image = index == 0 ? sourceMenuIcon(korean: true) : tabGlyph(glyphs[index], fontSize: index == 4 ? 14 : 16)
             button.setAccessibilityLabel(title + " 탭")
             tabs.addArrangedSubview(button); tabButtons.append(button)
         }
@@ -212,7 +223,10 @@ extension AppDelegate {
         hint("ABC·U.S. 영문과 두벌식 한글을 지원합니다.\n입력 기록을 저장하거나 전송하지 않습니다.", in: correction, indent: 0)
         correctionStatus.font = .systemFont(ofSize: 11); correctionStatus.textColor = .secondaryLabelColor
         full(correctionStatus, in: correction)
-        let about = tabPanels[5]; about.alignment = .centerX; about.spacing = 18
+        #if ARASO_BETA
+        addArasoBetaControls(to: tabPanels[5])
+        #endif
+        let about = tabPanels.last!; about.alignment = .centerX; about.spacing = 18
         // Load the artwork directly, without the system's rounded app-icon background.
         let artwork = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
         let appIcon = NSImageView(image: artwork ?? NSApp.applicationIconImage)

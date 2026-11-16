@@ -10,6 +10,13 @@ notes=$2
 [[ "$(git branch --show-current)" == main ]] || { echo 'Publish from main.' >&2; exit 1; }
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
 tag="v$version"
+channel=$(ruby -r ./scripts/release-metadata.rb -e 'puts ReleaseMetadata.new(ARGV.fetch(0)).channel' "$version")
+release_flags=(--latest)
+title="gkdl $version"
+if [[ "$channel" != stable ]]; then
+  release_flags=(--prerelease --latest=false)
+  title="gkdl $version ($channel)"
+fi
 archive="$package/gkdl-$version-macos-universal.zip"
 dmg="$package/gkdl-$version.dmg"
 ruby scripts/prepare-release.rb "$archive" "$dmg"
@@ -33,4 +40,4 @@ fi
 git push origin main "refs/tags/$tag"
 # gh refuses to overwrite an existing release. No --clobber or forced tag updates.
 gh release create "$tag" "$archive" "$dmg" "$package/SHA256SUMS" \
-  --repo rioald/gkdl --verify-tag --latest --title "gkdl $version" --notes-file "$notes"
+  --repo rioald/gkdl --verify-tag "${release_flags[@]}" --title "$title" --notes-file "$notes"

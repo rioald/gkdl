@@ -7,7 +7,7 @@ Swift/AppKit 기반 macOS 메뉴 막대 앱입니다. 최소 macOS 13, 배포 �
 ## 검증
 
 ```sh
-bash -n build.sh scripts/package-release.sh scripts/publish-release.sh signing/verify-update-identity.sh
+bash -n build.sh scripts/build-araso-beta.sh scripts/package-release.sh scripts/publish-release.sh signing/verify-update-identity.sh
 ruby scripts/test_release.rb
 bash build.sh
 ```
@@ -20,7 +20,24 @@ open "outputs/dev/gkdl dev.app" --args --settings
 
 일반 앱에서 테스트 코드를 제외하고, 별도 `gkdl dev tests.app`에 `-D TESTS`를 넣어 자체 테스트를 실행합니다. 한영 전환·잠금화면 복구·아차차 변환·CLI 설정과 일시정지·Caps Lock 아이콘·유니버설 컨트롤 판정·업데이트 검증과 교체 실패 복원 등을 확인합니다. 개발 기본 서명은 ad-hoc이며, 개발 앱은 정식 릴리스 업데이트를 조회하거나 설치하지 않습니다.
 
-정식 앱 빌드는 `GKDL_BUILD_VARIANT=release bash build.sh`로 구분합니다. 아래 배포 스크립트는 이 값을 자동으로 지정하며, 기존 `gkdl.app` 이름·식별자·배포 파일명을 유지합니다.
+정식·프리릴리즈 앱 빌드는 `GKDL_BUILD_VARIANT=release bash build.sh`, 카나리아는 `GKDL_BUILD_VARIANT=canary bash build.sh`로 구분합니다. 배포 스크립트는 버전의 숫자 필드 개수에 맞춰 빌드 종류를 자동 지정하며, 기존 `gkdl.app` 이름·식별자·배포 파일명을 유지합니다.
+
+### Araso 베타
+
+`GKDL_BUILD_VARIANT=beta bash build.sh`는 `outputs/beta/하이 Beta.app`과 ZIP을 만듭니다.
+앱 식별자는 `com.zzune.gkdl.beta`, 포함된 입력기는 `com.zzune.gkdl.beta.inputmethod`입니다.
+정식 앱과 설정을 공유하지 않으며, 업데이트와 로그인 자동 등록은 꺼져 있습니다.
+한·영 엔진과 데이터는 `ThirdParty/Araso/UPSTREAM.json`의 커밋에 고정합니다.
+베타 빌드는 원본 파일 해시, 번들 데이터 로딩, 판별·혼합어·수동 전환·입력 길이 제한과 기존 자체 테스트를 검증합니다.
+
+실행 후 **Beta → 베타 입력기 설치하고 사용**으로 사용자 계정의 `~/Library/Input Methods/하이 Beta 입력기.app`에 설치합니다.
+macOS가 요구하면 시스템 설정 → 키보드 → 입력 소스에서 **하이 Beta**를 추가합니다.
+베타 입력기는 하이의 활성화·일시정지와 별개인 시스템 입력 소스이며, **기존 입력기로 돌아가기** 또는 시스템 입력 메뉴로 사용을 끝냅니다.
+베타 앱 정상 종료 시에는 이전 입력 소스로 돌아갑니다. 강제 종료 후에는 시스템 입력 메뉴로 전환할 수 있습니다.
+개발 중 입력기 바이너리를 교체하려면 기존 입력기로 전환한 뒤 로그아웃하고, 설치한 베타 입력기만 제거한 후 다시 설치합니다.
+베타 빌드는 로컬 시험용이며 공증·공개 배포 완료를 의미하지 않습니다.
+
+공개 카나리아 빌드에도 같은 Beta 탭과 입력기를 포함합니다. 카나리아는 정식 앱과 같은 `com.zzune.gkdl` 식별자·설정을 사용하며 기존 앱을 업데이트합니다. `GKDLChannel=canary`로 구분하고, 설정에서 업데이트 채널을 선택할 수 있습니다. 자동 언어 판별은 입력기를 직접 선택해야 켜집니다.
 
 실제 입력과 접근성은 별도 확인이 필요합니다. [tests/README.md](tests/README.md)의 절차를 참고하세요. 실행 중인 다른 입력 전환 앱은 먼저 정상 종료하세요.
 

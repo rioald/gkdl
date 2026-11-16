@@ -4,16 +4,25 @@ require_relative 'release-metadata'
 
 class ReleaseTests < Minitest::Test
   def test_release_version_and_tag_must_match
-    %w[main v1.2.1 pre-v.1.2.0 ../1.2.0].each do |tag|
+    %w[main v1.2.1 pre-v1.2.0 pre-v.1.2.0 ../1.2.0].each do |tag|
       assert_raises(ArgumentError) { ReleaseMetadata.new('1.2.0', tag) }
     end
-    ["1.2.0\n", '1.2', '1.2.0-beta.1', '01.2.0'].each do |version|
+    ["1.2.0\n", '1.2', '1.2.0-beta.1', '01.2.0', '1.2.0.0', '1.2.0.1.0', '1.2.0.01.1', '1.2.0.1.1.1'].each do |version|
       assert_raises(ArgumentError) { ReleaseMetadata.new(version) }
     end
     assert_equal 'gkdl-1.2.0-macos-universal.zip', ReleaseMetadata.new('1.2.0').filename
-    assert_equal 'gkdl-1.2.0-pre-macos-universal.zip', ReleaseMetadata.new('1.2.0', 'pre-v1.2.0').filename
     assert_equal 'gkdl-1.2.0.dmg', ReleaseMetadata.new('1.2.0').dmg_filename
-    assert_equal 'gkdl-1.2.0-pre.dmg', ReleaseMetadata.new('1.2.0', 'pre-v1.2.0').dmg_filename
+  end
+
+  def test_update_channels_use_numeric_tags_and_matching_asset_names
+    { '1.2.0' => 'stable', '1.2.0.1' => 'prerelease', '1.2.0.0.1' => 'canary', '1.2.0.1.5' => 'canary' }.each do |version, channel|
+      metadata = ReleaseMetadata.new(version)
+      assert_equal "v#{version}", metadata.tag
+      assert_equal channel, metadata.channel
+      assert_equal channel != 'stable', metadata.prerelease?
+      assert_equal "gkdl-#{version}-macos-universal.zip", metadata.filename
+      assert_equal "gkdl-#{version}.dmg", metadata.dmg_filename
+    end
   end
 
   def listing(mode = '-rw-r--r--', size = 128)

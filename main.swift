@@ -6,6 +6,7 @@ import Carbon
 enum AppIdentity {
     static let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "gkdl"
     static let isDevelopment = Bundle.main.bundleIdentifier?.hasPrefix("com.zzune.gkdl.dev") == true
+        || Bundle.main.bundleIdentifier == "com.zzune.gkdl.beta"
 }
 
 let srcKey = "HIDKeyboardModifierMappingSrc"
@@ -790,8 +791,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
     let inputBadge = NSImageView()
     func controlTextDidChange(_ notification: Notification) {
         guard let field = notification.object as? NSTextField, field === testInput else { return }
+        #if !ARASO_BETA
         // Save only our test field, without modifying the editor or its marked text.
         engine.testInputText = field.stringValue
+        #endif
     }
     let iconPicker = NSPopUpButton()
     let koreanPreview = NSImageView()
@@ -949,6 +952,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
                     if let tap = owner.keyTap { CGEvent.tapEnable(tap: tap, enable: true) }
                     return Unmanaged.passUnretained(event)
                 }
+                #if ARASO_BETA
+                if ArasoBeta.selected {
+                    owner.manualCorrection.reset(); owner.terminalCorrection.reset()
+                    return Unmanaged.passUnretained(event)
+                }
+                #endif
                 if owner.manualCorrection.handle(event, enabled: owner.engine.active && owner.engine.manualCorrection && !owner.optionInput.busy, marker: owner.nativePulseMarker, shortcut: owner.engine.manualCorrectionShortcut) { return nil }
                 owner.terminalCorrection.observe(event, enabled: owner.engine.active && owner.engine.manualCorrection && !owner.optionInput.busy, marker: owner.nativePulseMarker)
                 // Keys this app posts again, such as ones held while a switch landed, act only once.
@@ -1878,6 +1887,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSWind
         if preparedToRelaunch { return .terminateNow }
         guard !engine.isUpdatingSettings else { return .terminateCancel }
         do {
+            #if ARASO_BETA
+            try ArasoBeta.restore(defaults: engine.defaults)
+            #endif
             try engine.restoreSystem()
             stopKeyTap()
             timer?.invalidate()

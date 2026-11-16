@@ -44,7 +44,9 @@ else
 fi
 
 version=${GKDL_APP_VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)}
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo '버전은 X.Y.Z 형식이어야 합니다.' >&2; exit 1; }
+channel=$(ruby -r ./scripts/release-metadata.rb -e 'puts ReleaseMetadata.new(ARGV.fetch(0)).channel' "$version")
+variant=release
+if [[ "$channel" == canary ]]; then variant=canary; fi
 destination=${GKDL_PACKAGE_DIR:-"$PWD/outputs/packages/$version-$status"}
 [[ ! -e "$destination" && ! -L "$destination" ]] || { echo "결과 폴더가 이미 있습니다: $destination" >&2; exit 1; }
 if [[ "$status" == notarized ]]; then
@@ -57,7 +59,7 @@ fi
 mkdir -p "$(dirname "$destination")"
 stage=$(mktemp -d "$(dirname "$destination")/.gkdl-package.XXXXXX")
 trap 'echo "패키징 미완료. 진단 파일: $stage" >&2' ERR
-GKDL_BUILD_VARIANT=release GKDL_SIGN_MODE=developer-id GKDL_SIGN_IDENTITY="$identity" GKDL_OUTPUT_DIR="$stage/build" bash build.sh
+GKDL_BUILD_VARIANT="$variant" GKDL_SIGN_MODE=developer-id GKDL_SIGN_IDENTITY="$identity" GKDL_OUTPUT_DIR="$stage/build" bash build.sh
 ditto -x -k "$stage/build/gkdl-$version-macos-universal.zip" "$stage"
 app="$stage/gkdl.app"
 requirement="=identifier \"com.zzune.gkdl\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$team\""
@@ -82,6 +84,12 @@ if [[ "$status" == notarized ]]; then
   [[ "$wait_status" == 0 && "$result" == Accepted ]] || {
     echo "Apple 공증 미완료: ${result:-조회 실패}. 접수 ID: $submission, 진단 폴더: $stage" >&2; exit 1;
   }
+  if [[ "$variant" == canary ]]; then
+    helper="$app/Contents/PlugIns/하이 Beta 입력기.app"
+    xcrun stapler staple "$helper"
+    xcrun stapler validate "$helper"
+    spctl --assess --type execute --verbose=2 "$helper"
+  fi
   xcrun stapler staple "$app"
   xcrun stapler validate "$app"
   codesign --verify --deep --strict --all-architectures -R "$requirement" "$app"

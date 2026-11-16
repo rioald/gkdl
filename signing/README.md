@@ -19,6 +19,8 @@ Apple ID 인증은 앱 암호와 위 팀 ID를 사용합니다. 이미 프로필
 
 버전은 `Info.plist`의 `CFBundleShortVersionString`, 빌드 번호는 `CFBundleVersion`입니다. 정식 패키징 전에 소스를 커밋합니다.
 
+버전은 정식 `X.Y.Z`, 프리릴리즈 `X.Y.Z.N`, 카나리아 `X.Y.Z.N.C`를 사용하며 마지막 순번은 1부터 시작합니다. 예를 들어 정식 `1.1.1` 다음 첫 카나리아는 `1.1.1.0.1`입니다. 카나리아 패키징은 Beta 입력기를 포함하고 그 입력기에도 Developer ID 서명과 공증 티켓을 첨부합니다. 공개 시 프리릴리즈·카나리아는 GitHub prerelease로 표시하고 Latest와 Homebrew 정식 버전을 갱신하지 않습니다.
+
 ```sh
 GKDL_NOTARY_PROFILE=gkdl-notary bash scripts/package-release.sh --notarize
 ```

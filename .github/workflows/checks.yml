@@ -21,6 +21,9 @@ jobs:
     # A draft cannot be merged; ready_for_review runs it.
     if: github.event_name == 'push' || !github.event.pull_request.draft
     runs-on: macos-15
+    strategy:
+      matrix:
+        variant: [dev, canary]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -30,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n build.sh scripts/package-release.sh scripts/publish-release.sh signing/verify-update-identity.sh
+          bash -n build.sh scripts/build-araso-beta.sh scripts/package-release.sh scripts/publish-release.sh signing/verify-update-identity.sh
           ruby -c scripts/prepare-release.rb
           ruby scripts/test_release.rb
           python3 scripts/run-with-timeout.py 2 /usr/bin/true
@@ -43,6 +46,8 @@ jobs:
       - name: Build Universal app and run self-tests
         env:
           GKDL_SIGN_MODE: ad-hoc
+          GKDL_BUILD_VARIANT: ${{ matrix.variant }}
+          GKDL_APP_VERSION: ${{ matrix.variant == 'canary' && '0.0.0.0.1' || '0.0.0' }}
         run: bash build.sh
       - name: Diagnose a self-test crash
         if: failure()

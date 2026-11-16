@@ -3,6 +3,7 @@
 # DMG verification adapted from gksdud and modified for gkdl; see LICENSE (Apache-2.0).
 require 'digest'
 require 'fileutils'
+require 'json'
 require 'open3'
 require 'tmpdir'
 require_relative 'release-metadata'
@@ -27,6 +28,35 @@ code_hashes = lambda do |app|
   end
 end
 archive_hashes = nil
+verify_beta = lambda do |app|
+  helper = "#{app}/Contents/PlugIns/하이 Beta 입력기.app"
+  if metadata.channel == 'canary'
+    abort 'Canary build marker missing' unless capture!('/usr/libexec/PlistBuddy', '-c', 'Print :GKDLChannel', "#{app}/Contents/Info.plist") == 'canary'
+    helper_requirement = requirement.sub('"com.zzune.gkdl"', '"com.zzune.gkdl.beta.inputmethod"')
+    capture!('/usr/bin/codesign', '--verify', '--strict', '--all-architectures', '-R', helper_requirement, helper)
+    %w[CFBundleShortVersionString CFBundleVersion].each do |key|
+      abort "Input method #{key} differs from parent" unless
+        capture!('/usr/libexec/PlistBuddy', '-c', "Print :#{key}", "#{helper}/Contents/Info.plist") ==
+        capture!('/usr/libexec/PlistBuddy', '-c', "Print :#{key}", "#{app}/Contents/Info.plist")
+    end
+    abort 'Expected Universal input method' unless capture!('/usr/bin/lipo', '-archs', "#{helper}/Contents/MacOS/HiBetaInput").split.sort == %w[arm64 x86_64]
+    signature = capture!('/usr/bin/codesign', '-d', '--verbose=4', helper)
+    abort 'Input method needs timestamp and hardened runtime' unless signature.match?(/^Timestamp=/) && signature.match?(/flags=.*\(runtime\)/)
+    capture!('/usr/bin/xcrun', 'stapler', 'validate', helper)
+    capture!('/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=2', helper)
+    upstream = "#{root}/ThirdParty/Araso"
+    notices = ["#{upstream}/NOTICE.txt", "#{upstream}/LICENSE", *Dir["#{upstream}/Notices/*"].sort].map { |path| File.binread(path) }.join
+    [app, helper].each do |bundle|
+      abort 'Araso license notices differ from source' unless File.binread("#{bundle}/Contents/Resources/ThirdPartyNotices.txt") == notices
+    end
+    JSON.parse(File.read("#{upstream}/UPSTREAM.json")).fetch('files').each do |name, info|
+      next unless name.start_with?('Data/')
+      abort "Araso data differs: #{name}" unless Digest::SHA256.file("#{helper}/Contents/Resources/#{File.basename(name)}").hexdigest == info.fetch('sha256')
+    end
+  else
+    abort 'Araso beta must only ship on canary' if File.exist?(helper)
+  end
+end
 
 Dir.mktmpdir('gkdl-release-') do |stage|
   ReleaseArchive.validate_listing!(capture!('/usr/bin/unzip', '-Z1', archive), capture!('/usr/bin/unzip', '-Z', '-l', archive))
@@ -49,6 +79,7 @@ Dir.mktmpdir('gkdl-release-') do |stage|
   abort 'Secure timestamp and hardened runtime required' unless signature.match?(/^Timestamp=/) && signature.match?(/flags=.*\(runtime\)/)
   capture!('/usr/bin/xcrun', 'stapler', 'validate', app)
   capture!('/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=2', app)
+  verify_beta.call(app)
   archive_hashes = code_hashes.call(app)
 end
 
@@ -67,6 +98,7 @@ Dir.mktmpdir('gkdl-dmg-') do |stage|
     app = "#{volume}/gkdl.app"
     capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', requirement, app)
     capture!('/usr/bin/xcrun', 'stapler', 'validate', app)
+    verify_beta.call(app)
     abort 'Disk image app differs from the archive' unless code_hashes.call(app) == archive_hashes
   ensure
     if File.directory?(volume)
