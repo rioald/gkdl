@@ -63,9 +63,7 @@ Dir.mktmpdir('gkdl-dmg-') do |stage|
   volume = "#{stage}/volume"
   begin
     capture!('/usr/bin/hdiutil', 'attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', volume, dmg)
-    abort 'Unexpected disk image contents' unless
-      Dir.children(volume).sort == ['.DS_Store', '.VolumeIcon.icns', '.background.tiff', 'Applications', 'gkdl.app'] &&
-      File.symlink?("#{volume}/Applications") && File.readlink("#{volume}/Applications") == '/Applications'
+    ReleaseDiskImage.validate_contents!(volume)
     app = "#{volume}/gkdl.app"
     capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', requirement, app)
     capture!('/usr/bin/xcrun', 'stapler', 'validate', app)

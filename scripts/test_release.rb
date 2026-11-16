@@ -1,4 +1,5 @@
 require 'minitest/autorun'
+require 'tmpdir'
 require_relative 'release-metadata'
 
 class ReleaseTests < Minitest::Test
@@ -33,5 +34,28 @@ class ReleaseTests < Minitest::Test
     assert_raises(ArgumentError) { ReleaseArchive.validate_listing!("gkdl.app/a\ngkdl.app/b", listing) }
     assert_raises(ArgumentError) { ReleaseArchive.validate_listing!('gkdl.app/a', listing('-rw-r--r--', 200_000_001)) }
     assert_raises(ArgumentError) { ReleaseArchive.validate_listing!('gkdl.app/a', listing('-rw-r--r--', 0)) }
+  end
+
+  def test_disk_image_allows_only_expected_files_and_macos_event_directory
+    Dir.mktmpdir('gkdl-dmg-test-') do |volume|
+      %w[.DS_Store .VolumeIcon.icns .background.tiff].each { |name| File.write(File.join(volume, name), '') }
+      Dir.mkdir(File.join(volume, 'gkdl.app'))
+      applications = File.join(volume, 'Applications')
+      File.symlink('/Applications', applications)
+      assert ReleaseDiskImage.validate_contents!(volume)
+      events = File.join(volume, '.fseventsd')
+      Dir.mkdir(events)
+      assert ReleaseDiskImage.validate_contents!(volume)
+      Dir.rmdir(events)
+      File.symlink('/tmp', events)
+      assert_raises(ArgumentError) { ReleaseDiskImage.validate_contents!(volume) }
+      File.unlink(events)
+      File.write(File.join(volume, 'unexpected'), '')
+      assert_raises(ArgumentError) { ReleaseDiskImage.validate_contents!(volume) }
+      File.unlink(File.join(volume, 'unexpected'))
+      File.unlink(applications)
+      File.symlink('/tmp', applications)
+      assert_raises(ArgumentError) { ReleaseDiskImage.validate_contents!(volume) }
+    end
   end
 end

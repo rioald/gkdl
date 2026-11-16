@@ -6,7 +6,7 @@
 // converted; one copied from another image leaves the window white.
 import AppKit
 
-let window = NSRect(x: 200, y: 120, width: 560, height: 340)
+let window = NSRect(x: 200, y: 120, width: 560, height: 420)
 let iconSize = 128.0
 // Icon centres from the top left of the window's content.
 let appCentre = NSPoint(x: 150, y: 160), applicationsCentre = NSPoint(x: 410, y: 160)

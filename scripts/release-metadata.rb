@@ -49,6 +49,20 @@ module ReleaseArchive
   end
 end
 
+module ReleaseDiskImage
+  def self.validate_contents!(volume)
+    entries = Dir.children(volume)
+    # macOS can recreate its filesystem event directory while detaching a writable image.
+    events = File.join(volume, '.fseventsd')
+    entries.delete('.fseventsd') if File.directory?(events) && !File.symlink?(events)
+    applications = File.join(volume, 'Applications')
+    valid = entries.sort == ['.DS_Store', '.VolumeIcon.icns', '.background.tiff', 'Applications', 'gkdl.app'] &&
+      File.symlink?(applications) && File.readlink(applications) == '/Applications'
+    raise ArgumentError, 'Unexpected disk image contents' unless valid
+    true
+  end
+end
+
 if $PROGRAM_NAME == __FILE__
   abort 'Usage: ruby scripts/release-metadata.rb VERSION TAG' unless ARGV.length == 2
   begin
