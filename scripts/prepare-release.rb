@@ -29,7 +29,7 @@ code_hashes = lambda do |app|
 end
 archive_hashes = nil
 verify_beta = lambda do |app|
-  helper = "#{app}/Contents/PlugIns/하이 Beta 입력기.app"
+  helper = "#{app}/Contents/PlugIns/HiBetaInput.app"
   if metadata.channel == 'canary'
     abort 'Canary build marker missing' unless capture!('/usr/libexec/PlistBuddy', '-c', 'Print :GKDLChannel', "#{app}/Contents/Info.plist") == 'canary'
     helper_requirement = requirement.sub('"com.zzune.gkdl"', '"com.zzune.gkdl.beta.inputmethod"')

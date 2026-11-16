@@ -70,7 +70,7 @@ fi
 codesign --force "${sign_args[@]}" --identifier "$bundle_id.cli" --options runtime "$app/Contents/Helpers/gkdl"
 if [[ "$variant" == beta || "$variant" == canary ]]; then
   bash scripts/build-araso-beta.sh "$stage" "$app"
-  codesign --force "${sign_args[@]}" --options runtime "$app/Contents/PlugIns/하이 Beta 입력기.app"
+  codesign --force "${sign_args[@]}" --options runtime "$app/Contents/PlugIns/HiBetaInput.app"
 fi
 codesign --force "${sign_args[@]}" --options runtime "$app"
 codesign --verify --deep --strict "$app"

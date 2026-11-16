@@ -85,7 +85,7 @@ if [[ "$status" == notarized ]]; then
     echo "Apple 공증 미완료: ${result:-조회 실패}. 접수 ID: $submission, 진단 폴더: $stage" >&2; exit 1;
   }
   if [[ "$variant" == canary ]]; then
-    helper="$app/Contents/PlugIns/하이 Beta 입력기.app"
+    helper="$app/Contents/PlugIns/HiBetaInput.app"
     xcrun stapler staple "$helper"
     xcrun stapler validate "$helper"
     spctl --assess --type execute --verbose=2 "$helper"
@@ -132,6 +132,7 @@ layout_image() {
 trap unmount EXIT
 retry_cleanup=unmount retry layout_image
 "$stage/disk-image" layout "$stage/volume"
+codesign --verify --deep --strict --all-architectures -R "$requirement" "$stage/volume/gkdl.app"
 rm -rf "$stage/volume/.fseventsd"
 retry detach || unmount
 if [[ -n $(disks) ]]; then echo "Cannot detach $image" >&2; exit 1; fi

@@ -12,7 +12,9 @@ for name,info in json.loads((root/'UPSTREAM.json').read_text())['files'].items()
     if hashlib.sha256((root/name).read_bytes()).hexdigest()!=info['sha256']:
         raise SystemExit('Araso source mismatch: '+name)
 PY
-app="$parent/Contents/PlugIns/하이 Beta 입력기.app"
+# Keep the sealed nested path ASCII: HFS+ DMGs normalize Korean filenames differently.
+# The input source's display name and installed top-level bundle remain Korean.
+app="$parent/Contents/PlugIns/HiBetaInput.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 for arch in arm64 x86_64; do
   module="$stage/araso-$arch"

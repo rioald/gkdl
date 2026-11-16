@@ -23,7 +23,7 @@ enum ArasoBeta {
         NSError(domain: "gkdl.beta", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
     static func install() throws {
-        guard let helper = Bundle.main.builtInPlugInsURL?.appendingPathComponent("하이 Beta 입력기.app"),
+        guard let helper = Bundle.main.builtInPlugInsURL?.appendingPathComponent("HiBetaInput.app"),
               Bundle(url: helper)?.bundleIdentifier == identifier else { throw fail("베타 입력기가 앱에 포함되어 있지 않습니다.") }
         let fm = FileManager.default
         try fm.createDirectory(at: directory.deletingLastPathComponent(), withIntermediateDirectories: true)
