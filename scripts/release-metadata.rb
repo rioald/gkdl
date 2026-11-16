@@ -1,3 +1,4 @@
+# Modified for gkdl; upstream DMG naming is adapted under Apache-2.0 (see LICENSE).
 # Shared tag validation and asset naming for the release workflow and verifier.
 class ReleaseMetadata
   attr_reader :version, :tag
@@ -23,9 +24,13 @@ class ReleaseMetadata
     "gkdl-#{asset_version}-macos-universal.zip"
   end
 
+  def dmg_filename
+    "gkdl-#{asset_version}.dmg"
+  end
+
   def outputs
     { version: version, tag: tag, prerelease: prerelease?,
-      asset_version: asset_version, filename: filename }
+      asset_version: asset_version, filename: filename, dmg_filename: dmg_filename }
   end
 end
 

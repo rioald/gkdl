@@ -250,7 +250,7 @@ extension AppDelegate {
         }
         let project = link("GitHub", icon: "github", action: #selector(openProject)); about.addArrangedSubview(project)
         about.setCustomSpacing(28, after: project); separator(in: about)
-        let credits = NSTextField(wrappingLabelWithString: "gkdl · © 2026 rioald · MIT\nbased on\ngksdud · © 2026 CodingNoye · MIT")
+        let credits = NSTextField(wrappingLabelWithString: "gkdl · © 2026 rioald · MIT\nbased on\ngksdud · © 2026 CodingNoye · MIT / Apache-2.0")
         credits.font = .systemFont(ofSize: 11); credits.textColor = .secondaryLabelColor; credits.alignment = .center
         about.addArrangedSubview(credits)
         about.addArrangedSubview(link("Github - gksdud", icon: "github", action: #selector(openUpstream)))

@@ -86,7 +86,7 @@ Homebrew로 설치하려면:
 brew install rioald/tap/gkdl
 ```
 
-직접 설치하려면 [최신 릴리스](https://github.com/rioald/gkdl/releases/latest)에서 ZIP을 내려받아 압축을 풀고, `gkdl.app`을 **응용 프로그램** 폴더로 옮기세요.
+직접 설치하려면 [최신 릴리스](https://github.com/rioald/gkdl/releases/latest)에서 DMG를 열고, `gkdl.app`을 **Applications**로 끌어옮기세요. ZIP을 내려받아 압축을 풀고 **응용 프로그램** 폴더로 옮겨도 됩니다.
 
 ### 처음 실행할 때
 
@@ -115,7 +115,9 @@ brew upgrade --greedy rioald/tap/gkdl
 
 ## 출처·라이선스
 
-한영 전환 기능은 [gksdud](https://github.com/codingnoye/gksdud)를 기반으로 합니다. 원작의 기능과 동작 방식은 [통합한 gksdud 원본 README](https://github.com/codingnoye/gksdud/blob/a4ae9549c93030c0e8463f93fbe6c1c84ccbb008/README.md)에서 확인할 수 있습니다.
+한영 전환 기능은 [gksdud](https://github.com/codingnoye/gksdud)를 기반으로 합니다. 원작의 기능과 동작 방식은 [통합한 gksdud 원본 README](https://github.com/codingnoye/gksdud/blob/26ee30a5fb970eeebac89872778818a2c439446d/README.md)에서 확인할 수 있습니다.
 
 gkdl · © 2026 rioald · [MIT](LICENSE)<br>
-based on [gksdud](https://github.com/codingnoye/gksdud) · © 2026 CodingNoye · [MIT](LICENSE)
+based on [gksdud](https://github.com/codingnoye/gksdud) · © 2026 CodingNoye · [MIT / Apache-2.0](LICENSE)
+
+기존 MIT 저작권·라이선스 고지를 유지하며, gksdud 2.1.1에서 가져온 부분의 Apache-2.0 라이선스와 변경 내역도 [LICENSE](LICENSE)에 포함합니다.

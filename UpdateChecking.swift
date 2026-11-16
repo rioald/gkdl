@@ -1,3 +1,4 @@
+// Modified for gkdl; retained MIT and upstream Apache-2.0 notices are in LICENSE.
 import Foundation
 
 struct ReleaseVersion: Comparable {
@@ -100,7 +101,7 @@ struct AppRelease: Codable {
     }
     var summary: String {
         let text = section("요약")
-        return text.isEmpty ? "이번 버전의 요약은 릴리스 페이지에서 확인할 수 있습니다." : text
+        return text.isEmpty ? "이번 버전의 요약은 릴리즈 페이지에서 확인할 수 있습니다." : text
     }
     // What to know before installing this version, shown for confirmation before an update installs it.
     var warning: String { section("경고") }

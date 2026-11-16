@@ -11,6 +11,8 @@ class ReleaseTests < Minitest::Test
     end
     assert_equal 'gkdl-1.2.0-macos-universal.zip', ReleaseMetadata.new('1.2.0').filename
     assert_equal 'gkdl-1.2.0-pre-macos-universal.zip', ReleaseMetadata.new('1.2.0', 'pre-v1.2.0').filename
+    assert_equal 'gkdl-1.2.0.dmg', ReleaseMetadata.new('1.2.0').dmg_filename
+    assert_equal 'gkdl-1.2.0-pre.dmg', ReleaseMetadata.new('1.2.0', 'pre-v1.2.0').dmg_filename
   end
 
   def listing(mode = '-rw-r--r--', size = 128)

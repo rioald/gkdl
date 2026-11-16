@@ -1,5 +1,6 @@
 #!/bin/bash
 # 로컬 키체인의 Developer ID로 빌드한다. 설치하거나 공개하지 않는다.
+# DMG packaging adapted from gksdud and modified for gkdl; see LICENSE (Apache-2.0).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -90,7 +91,69 @@ fi
 # 공증 티켓이 첨부된 앱을 다시 압축해야 오프라인에서도 티켓을 사용할 수 있다.
 archive="gkdl-$version-macos-universal.zip"
 ditto -c -k --keepParent --norsrc "$app" "$stage/$archive"
-(cd "$stage" && shasum -a 256 "$archive" > SHA256SUMS)
+
+# Use the upstream Finder layout with gkdl's icon and the same stapled app as the ZIP.
+swiftc -module-cache-path "$stage/module-cache" DiskImage.swift -o "$stage/disk-image"
+mkdir "$stage/dmg"
+ditto "$app" "$stage/dmg/gkdl.app"
+ln -s /Applications "$stage/dmg/Applications"
+"$stage/disk-image" background "$stage/dmg/.background.tiff"
+cp "$app/Contents/Resources/AppIcon.icns" "$stage/dmg/.VolumeIcon.icns"
+chflags hidden "$stage/dmg/.background.tiff" "$stage/dmg/.VolumeIcon.icns"
+size=$(( $(du -sk "$stage/dmg" | cut -f1) * 12 / 10240 + 16 ))m
+image="$stage/layout.dmg"
+disks() {
+  hdiutil info | awk -v image="$image" '/^image-path/ { sub(/^image-path *: /, ""); current = ($0 == image) }
+    current && /^\/dev\/disk[0-9]+[ \t]/ { print $1 }'
+}
+unmount() { local disk; for disk in $(disks); do hdiutil detach -quiet -force "$disk" || true; done; }
+detach() { local disk; for disk in $(disks); do hdiutil detach -quiet "$disk" || return 1; done; }
+retry() {
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if "$@"; then return 0; fi
+    [[ -z ${retry_cleanup:-} ]] || "$retry_cleanup"
+    if [[ $attempt -lt 5 ]]; then sleep $((attempt * 3)); fi
+  done
+  return 1
+}
+layout_image() {
+  hdiutil create -quiet -ov -volname gkdl -srcfolder "$stage/dmg" -fs HFS+ -format UDRW -size "$size" "$image" &&
+    hdiutil attach -quiet -nobrowse -noautoopen -mountpoint "$stage/volume" "$image"
+}
+trap unmount EXIT
+retry_cleanup=unmount retry layout_image
+"$stage/disk-image" layout "$stage/volume"
+rm -rf "$stage/volume/.fseventsd"
+retry detach || unmount
+if [[ -n $(disks) ]]; then echo "Cannot detach $image" >&2; exit 1; fi
+retry_cleanup=unmount retry hdiutil convert -quiet -ov "$image" -format UDZO -o "$stage/gkdl-$version.dmg"
+trap - EXIT
+dmg="gkdl-$version.dmg"
+codesign --force --sign "$identity" --timestamp --identifier com.zzune.gkdl.dmg "$stage/$dmg"
+codesign --verify --strict "$stage/$dmg"
+if [[ "$status" == notarized ]]; then
+  xcrun notarytool submit "$stage/$dmg" --keychain-profile "$GKDL_NOTARY_PROFILE" \
+    --no-wait --output-format json > "$stage/dmg-notary-submission.json"
+  submission=$(/usr/bin/plutil -extract id raw -o - "$stage/dmg-notary-submission.json")
+  echo "Apple DMG 공증 접수: $submission"
+  wait_status=0
+  xcrun notarytool wait "$submission" --keychain-profile "$GKDL_NOTARY_PROFILE" \
+    --timeout 20m --output-format json > "$stage/dmg-notary-result.json" || wait_status=$?
+  result=$(/usr/bin/plutil -extract status raw -o - "$stage/dmg-notary-result.json" 2>/dev/null || true)
+  if [[ "$result" == Accepted || "$result" == Invalid || "$result" == Rejected ]]; then
+    xcrun notarytool log "$submission" --keychain-profile "$GKDL_NOTARY_PROFILE" "$stage/dmg-notary-log.json"
+  fi
+  [[ "$wait_status" == 0 && "$result" == Accepted ]] || {
+    echo "Apple DMG 공증 미완료: ${result:-조회 실패}. 접수 ID: $submission, 진단 폴더: $stage" >&2; exit 1;
+  }
+  retry xcrun stapler staple "$stage/$dmg"
+  xcrun stapler validate "$stage/$dmg"
+  spctl --assess --type open --context context:primary-signature --verbose=2 "$stage/$dmg"
+fi
+(cd "$stage" && shasum -a 256 "$archive" "$dmg" > SHA256SUMS)
+rm -r "$stage/dmg" "$stage/module-cache"
+rm "$stage/disk-image" "$image"
 codesign -d --verbose=4 -r- "$app" > "$stage/signature.txt" 2>&1
 cat > "$stage/PACKAGE.txt" <<EOF
 gkdl $version / Developer ID ($team)

@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 # Verify a signed, stapled release locally. Never publishes or changes system settings.
+# DMG verification adapted from gksdud and modified for gkdl; see LICENSE (Apache-2.0).
 require 'digest'
 require 'fileutils'
 require 'open3'
@@ -12,7 +13,7 @@ def capture!(*args)
   output.strip
 end
 
-abort 'Usage: ruby scripts/prepare-release.rb archive.zip' unless ARGV.length == 1
+abort 'Usage: ruby scripts/prepare-release.rb archive.zip [installer.dmg]' unless ARGV.length.between?(1, 2)
 root = File.expand_path('..', __dir__)
 version = capture!('/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleShortVersionString', "#{root}/Info.plist")
 metadata = ReleaseMetadata.new(version)
@@ -20,6 +21,12 @@ archive = File.expand_path(ARGV[0])
 abort 'Missing release archive' unless File.file?(archive)
 abort "Release asset must be named #{metadata.filename}" unless File.basename(archive) == metadata.filename
 requirement = '=identifier "com.zzune.gkdl" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "KTC97BHY7R"'
+code_hashes = lambda do |app|
+  %w[arm64 x86_64].map do |arch|
+    capture!('/usr/bin/codesign', '-d', '--verbose=4', '--arch', arch, app)[/^CDHash=(\h+)$/, 1] or abort 'No CDHash'
+  end
+end
+archive_hashes = nil
 
 Dir.mktmpdir('gkdl-release-') do |stage|
   ReleaseArchive.validate_listing!(capture!('/usr/bin/unzip', '-Z1', archive), capture!('/usr/bin/unzip', '-Z', '-l', archive))
@@ -36,13 +43,42 @@ Dir.mktmpdir('gkdl-release-') do |stage|
   end
   arches = capture!('/usr/bin/lipo', '-archs', "#{app}/Contents/MacOS/gkdl").split
   abort 'Expected arm64 + x86_64' unless arches.sort == %w[arm64 x86_64]
+  helper_arches = capture!('/usr/bin/lipo', '-archs', "#{app}/Contents/Helpers/gkdl").split
+  abort 'Expected Universal CLI helper' unless helper_arches.sort == %w[arm64 x86_64]
   signature = capture!('/usr/bin/codesign', '-d', '--verbose=4', app)
   abort 'Secure timestamp and hardened runtime required' unless signature.match?(/^Timestamp=/) && signature.match?(/flags=.*\(runtime\)/)
   capture!('/usr/bin/xcrun', 'stapler', 'validate', app)
   capture!('/usr/sbin/spctl', '--assess', '--type', 'execute', '--verbose=2', app)
+  archive_hashes = code_hashes.call(app)
 end
 
-checksum = "#{Digest::SHA256.file(archive).hexdigest}  #{metadata.filename}\n"
+dmg = File.expand_path(ARGV[1] || File.join(File.dirname(archive), metadata.dmg_filename))
+abort 'Missing release disk image' unless File.file?(dmg)
+abort "Disk image must be named #{metadata.dmg_filename}" unless File.basename(dmg) == metadata.dmg_filename
+dmg_requirement = requirement.sub('"com.zzune.gkdl"', '"com.zzune.gkdl.dmg"')
+capture!('/usr/bin/codesign', '--verify', '--strict', '-R', dmg_requirement, dmg)
+capture!('/usr/bin/xcrun', 'stapler', 'validate', dmg)
+capture!('/usr/sbin/spctl', '--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', dmg)
+Dir.mktmpdir('gkdl-dmg-') do |stage|
+  volume = "#{stage}/volume"
+  begin
+    capture!('/usr/bin/hdiutil', 'attach', '-readonly', '-nobrowse', '-noautoopen', '-mountpoint', volume, dmg)
+    abort 'Unexpected disk image contents' unless
+      Dir.children(volume).sort == ['.DS_Store', '.VolumeIcon.icns', '.background.tiff', 'Applications', 'gkdl.app'] &&
+      File.symlink?("#{volume}/Applications") && File.readlink("#{volume}/Applications") == '/Applications'
+    app = "#{volume}/gkdl.app"
+    capture!('/usr/bin/codesign', '--verify', '--deep', '--strict', '--all-architectures', '-R', requirement, app)
+    capture!('/usr/bin/xcrun', 'stapler', 'validate', app)
+    abort 'Disk image app differs from the archive' unless code_hashes.call(app) == archive_hashes
+  ensure
+    if File.directory?(volume)
+      system('/usr/bin/hdiutil', 'detach', '-quiet', volume) || system('/usr/bin/hdiutil', 'detach', '-force', '-quiet', volume)
+    end
+  end
+end
+
+checksum = "#{Digest::SHA256.file(archive).hexdigest}  #{metadata.filename}\n" \
+  "#{Digest::SHA256.file(dmg).hexdigest}  #{metadata.dmg_filename}\n"
 sums = File.join(File.dirname(archive), 'SHA256SUMS')
 abort 'SHA256SUMS does not match the verified archive' unless File.file?(sums) && File.read(sums) == checksum
-puts "Verified: #{metadata.filename} (Developer ID, Universal, notarization ticket, Gatekeeper, SHA256)"
+puts "Verified: #{metadata.filename}, #{metadata.dmg_filename} (Developer ID, Universal, matching app, notarization tickets, Gatekeeper, SHA256)"

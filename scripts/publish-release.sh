@@ -11,7 +11,8 @@ notes=$2
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)
 tag="v$version"
 archive="$package/gkdl-$version-macos-universal.zip"
-ruby scripts/prepare-release.rb "$archive"
+dmg="$package/gkdl-$version.dmg"
+ruby scripts/prepare-release.rb "$archive" "$dmg"
 python3 - "$package/PACKAGE.json" "$version" "$(git rev-parse HEAD)" <<'PY'
 import json, sys
 from pathlib import Path
@@ -31,5 +32,5 @@ else
 fi
 git push origin main "refs/tags/$tag"
 # gh refuses to overwrite an existing release. No --clobber or forced tag updates.
-gh release create "$tag" "$archive" "$package/SHA256SUMS" \
+gh release create "$tag" "$archive" "$dmg" "$package/SHA256SUMS" \
   --repo rioald/gkdl --verify-tag --latest --title "gkdl $version" --notes-file "$notes"

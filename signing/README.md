@@ -30,7 +30,8 @@ GKDL_NOTARY_PROFILE=gkdl-notary bash scripts/package-release.sh --notarize
 3. Hardened Runtime 및 보안 타임스탬프로 서명하고 팀·앱 ID를 검증합니다.
 4. Apple에 ZIP을 제출하고 `Accepted` 상태를 확인합니다.
 5. 공증 티켓을 앱에 첨부하고 `stapler validate`, `codesign`, `spctl` 검증을 수행합니다.
-6. 티켓이 포함된 앱을 다시 압축하고 `SHA256SUMS`와 진단 기록을 저장합니다.
+6. 티켓이 포함된 앱을 다시 압축하고 같은 앱으로 DMG를 만듭니다. DMG도 별도로 서명·공증하고 티켓을 첨부합니다.
+7. ZIP·DMG의 `SHA256SUMS`와 진단 기록을 저장합니다. 공개 전 두 파일에 같은 Universal 앱이 포함되어 있는지 확인합니다.
 
 결과는 `outputs/packages/VERSION-notarized/`에 생성됩니다. 기존 결과는 덮어쓰지 않습니다. 중단되면 출력된 임시 폴더의 `notary-submission.json` 접수 ID로 상태를 조회할 수 있습니다.
 
